@@ -52,7 +52,10 @@ return [
      */
     'db' => [
         'driver' => $env('DB_DRIVER', 'pdo_mysql'),
-        'host' => $env('DB_HOST', $replica->isComplete() ? 'tools.db.svc.wikimedia.cloud' : '127.0.0.1'),
+        'host' => $env(
+            'DB_HOST',
+            $replica->isComplete() ? 'tools.db.svc.wikimedia.cloud' : '127.0.0.1'
+        ),
         'port' => (int) ($env('DB_PORT', '3306') ?? 3306),
         'dbname' => $env(
             'DB_NAME',
@@ -60,6 +63,9 @@ return [
         ),
         'user' => $env('DB_USER', $replica->user ?? 'root'),
         'password' => $env('DB_PASSWORD', $replica->password ?? ''),
+        // Toolforge's replica.my.cnf carries `disable-ssl = true`, and the
+        // same setting applies to the tools cluster.
+        'disable_ssl' => $bool($env('DB_DISABLE_SSL'), $replica->disableSsl),
         'charset' => 'utf8mb4',
         // Used when DB_DRIVER is pdo_sqlite; handy for tests.
         'path' => $env('DB_PATH', $root . '/var/data.sqlite'),
@@ -136,6 +142,10 @@ return [
             'user' => $credentials->user,
             'password' => $credentials->password,
             'credentials_source' => $credentials->source,
+            'disable_ssl' => $bool(
+                $env('REPLICA_DISABLE_SSL'),
+                $credentials->disableSsl,
+            ),
             'thumb_width' => (int) ($env('COMMONS_THUMB_WIDTH', '1024') ?? 1024),
             // Rows per keyset page. The replica is fast, so this is far
             // larger than the API's 500 ceiling.

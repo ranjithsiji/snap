@@ -30,6 +30,79 @@ class ReplicaCredentialsTest extends TestCase
     }
 
     /**
+     * The exact shape Toolforge writes. disable-ssl must survive parsing:
+     * the driver otherwise negotiates TLS the server does not offer, and
+     * the connection fails before a query is ever sent.
+     */
+    #[Test]
+    public function it_reads_a_real_toolforge_file(): void
+    {
+        $parsed = ReplicaCredentials::parseCnf(<<<'CNF'
+            [client]
+            user = s12345
+            password = SomepassWordHere
+            disable-ssl = true
+            CNF);
+
+        $this->assertSame('s12345', $parsed->user);
+        $this->assertSame('SomepassWordHere', $parsed->password);
+        $this->assertTrue($parsed->disableSsl);
+    }
+
+    /** A my.cnf flag may be written bare, with no value at all. */
+    #[Test]
+    public function it_accepts_a_bare_disable_ssl_flag(): void
+    {
+        $parsed = ReplicaCredentials::parseCnf(<<<'CNF'
+            [client]
+            user = s12345
+            password = secret
+            disable-ssl
+            CNF);
+
+        $this->assertTrue($parsed->disableSsl);
+    }
+
+    #[Test]
+    public function ssl_stays_on_when_the_file_is_silent(): void
+    {
+        $parsed = ReplicaCredentials::parseCnf(<<<'CNF'
+            [client]
+            user = s12345
+            password = secret
+            CNF);
+
+        $this->assertFalse($parsed->disableSsl);
+    }
+
+    #[Test]
+    public function it_honours_an_explicit_false(): void
+    {
+        $parsed = ReplicaCredentials::parseCnf(<<<'CNF'
+            [client]
+            user = s12345
+            password = secret
+            disable-ssl = false
+            CNF);
+
+        $this->assertFalse($parsed->disableSsl);
+    }
+
+    /** The flag has to survive discovery, not just parsing. */
+    #[Test]
+    public function discovery_carries_the_ssl_flag_through(): void
+    {
+        $home = $this->tempHome(
+            "[client]\nuser = s12345\npassword = p\ndisable-ssl = true\n"
+        );
+
+        $found = ReplicaCredentials::discover($this->env(['HOME' => $home]));
+
+        $this->assertTrue($found->disableSsl);
+        $this->assertSame($home . '/replica.my.cnf', $found->source);
+    }
+
+    /**
      * The documented example file for these credentials annotates the
      * username inline. parse_ini_file keeps that comment as part of the
      * value, which is the bug this parser exists to avoid.

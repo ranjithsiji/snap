@@ -51,7 +51,7 @@ function jurytool_dbal_params(array $db): array
         ];
     }
 
-    return [
+    $params = [
         'driver' => $db['driver'],
         'host' => $db['host'],
         'port' => $db['port'],
@@ -60,6 +60,18 @@ function jurytool_dbal_params(array $db): array
         'password' => $db['password'],
         'charset' => $db['charset'],
     ];
+
+    // Toolforge asks for SSL to be off, via `disable-ssl` in
+    // replica.my.cnf. Without this PDO negotiates TLS against a server
+    // that is not offering it and the connection fails outright.
+    if (!empty($db['disable_ssl']) && str_contains((string) $db['driver'], 'mysql')) {
+        $params['driverOptions'] = [
+            \PDO::MYSQL_ATTR_SSL_CA => null,
+            \PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => false,
+        ];
+    }
+
+    return $params;
 }
 
 return [

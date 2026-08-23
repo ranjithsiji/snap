@@ -294,7 +294,11 @@ class ReplicaClient
 
     private function connection(): Connection
     {
-        return $this->connection ??= DriverManager::getConnection([
+        if ($this->connection !== null) {
+            return $this->connection;
+        }
+
+        $params = [
             'driver' => 'pdo_mysql',
             'host' => (string) $this->settings['host'],
             'port' => (int) ($this->settings['port'] ?? 3306),
@@ -302,6 +306,18 @@ class ReplicaClient
             'user' => (string) $this->settings['user'],
             'password' => (string) ($this->settings['password'] ?? ''),
             'charset' => 'utf8mb4',
-        ]);
+        ];
+
+        // replica.my.cnf carries `disable-ssl = true`; honouring it is what
+        // lets the connection open at all, since the driver would otherwise
+        // insist on TLS the replica does not offer.
+        if (!empty($this->settings['disable_ssl'])) {
+            $params['driverOptions'] = [
+                \PDO::MYSQL_ATTR_SSL_CA => null,
+                \PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => false,
+            ];
+        }
+
+        return $this->connection = DriverManager::getConnection($params);
     }
 }

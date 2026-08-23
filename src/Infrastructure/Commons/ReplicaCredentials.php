@@ -19,6 +19,14 @@ final class ReplicaCredentials
         public readonly ?string $password = null,
         /** Where the credentials came from, for the diagnostics endpoint. */
         public readonly ?string $source = null,
+        /**
+         * Whether the file asked for SSL to be turned off.
+         *
+         * Toolforge writes `disable-ssl = true` into replica.my.cnf, and
+         * it has to be honoured: the driver would otherwise negotiate TLS
+         * against a server not offering it and fail to connect at all.
+         */
+        public readonly bool $disableSsl = false,
     ) {
     }
 
@@ -54,7 +62,14 @@ final class ReplicaCredentials
             $parsed = self::parseCnf((string) file_get_contents($path));
 
             if ($parsed->isComplete()) {
-                return new self($parsed->user, $parsed->password, $path);
+                // Rebuilt only to record where it was found; every other
+                // field, disable-ssl included, carries over as parsed.
+                return new self(
+                    $parsed->user,
+                    $parsed->password,
+                    $path,
+                    $parsed->disableSsl,
+                );
             }
         }
 
@@ -141,7 +156,15 @@ final class ReplicaCredentials
                 continue;
             }
 
-            if (!$inClient || !str_contains($line, '=')) {
+            if (!$inClient) {
+                continue;
+            }
+
+            // A my.cnf flag may appear bare, with no value, in which case
+            // its presence alone means "on" — `disable-ssl` is written
+            // both ways in the wild.
+            if (!str_contains($line, '=')) {
+                $values[strtolower(self::cleanValue($line))] = '1';
                 continue;
             }
 
@@ -150,7 +173,22 @@ final class ReplicaCredentials
             $values[strtolower(trim($key))] = self::cleanValue($value);
         }
 
-        return new self($values['user'] ?? null, $values['password'] ?? null, 'file');
+        return new self(
+            $values['user'] ?? null,
+            $values['password'] ?? null,
+            'file',
+            self::isTruthy($values['disable-ssl'] ?? null),
+        );
+    }
+
+    /**
+     * How my.cnf spells an enabled flag. A bare key is already normalised
+     * to "1" by the parser; the rest are the spellings MySQL accepts.
+     */
+    private static function isTruthy(?string $value): bool
+    {
+        return $value !== null
+            && in_array(strtolower($value), ['1', 'true', 'on', 'yes'], true);
     }
 
     /**
