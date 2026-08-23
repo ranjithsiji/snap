@@ -104,10 +104,16 @@ class ReplicaClient
      * consumes this and flushes as it goes. Only one page of rows is ever
      * resident.
      *
+     * Each file is keyed by the `cl_from` it was read at. Recording that
+     * as the import writes lets a later attempt pass it back as $after and
+     * resume, rather than re-reading a category from the beginning to
+     * establish that most of it is already stored.
+     *
+     * @param int $after Resume point; rows at or before it are not read.
      * @throws CategoryTooLargeException when the category exceeds the limit
      * @return \Generator<int, CommonsFile>
      */
-    public function streamFilesInCategory(string $category): \Generator
+    public function streamFilesInCategory(string $category, int $after = 0): \Generator
     {
         $category = str_replace(' ', '_', preg_replace('/^Category:/i', '', trim($category)) ?? '');
 
@@ -153,10 +159,12 @@ class ReplicaClient
             LIMIT :batch
             SQL;
 
-        $after = 0;
+        // $after arrives as the caller's resume point and advances from
+        // there; it is deliberately not reset.
         $batch = (int) ($this->settings['batch_size'] ?? 10000);
         $seen = 0;
         $yielded = 0;
+        $resumedFrom = $after;
 
         do {
             $rows = $this->connection()->executeQuery(
@@ -170,13 +178,20 @@ class ReplicaClient
             )->fetchAllAssociative();
 
             foreach ($rows as $row) {
-                $after = max($after, (int) $row['cursor_id']);
+                $cursor = (int) $row['cursor_id'];
+                $after = max($after, $cursor);
                 $file = $this->toFile($row);
 
                 if ($file !== null) {
                     $yielded++;
 
-                    yield $file;
+                    // The cursor travels on the file itself rather than as
+                    // the generator key: the API path yields auto-numbered
+                    // keys that look identical but mean a position, not a
+                    // page id, and resuming from one would silently skip
+                    // files. A file that carries its own cursor cannot be
+                    // confused with one that does not.
+                    yield $file->withResumeCursor($cursor);
                 }
             }
 
@@ -200,6 +215,7 @@ class ReplicaClient
             'category' => $category,
             'files' => $yielded,
             'rows' => $seen,
+            'resumed_from' => $resumedFrom ?: null,
         ]);
     }
 

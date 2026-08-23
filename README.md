@@ -302,11 +302,37 @@ flat however large the category is — measured at 16 MB while importing
 6,658 files. Progress is reported as it goes, since a silent terminal is
 indistinguishable from a hung process.
 
-Re-running is safe. Files are matched on their Commons page id and
-updated rather than duplicated, so an import interrupted halfway resumes
-from where it stopped. Without `--populate` the files land in the
-campaign pool but are not added to the round, which lets a large import
-run ahead of time and the round be filled separately.
+Without `--populate` the files land in the campaign pool but are not
+added to the round, which lets a large import run ahead of time and the
+round be filled separately.
+
+### Resuming an interrupted import
+
+Re-running continues the unfinished attempt rather than starting a new
+one, and files are matched on their Commons page id, so nothing is
+duplicated however many times an import is interrupted.
+
+On Toolforge the replica reader also records how far it got, as the
+`cl_from` it was paging on. A resumed import asks for rows after that
+point instead of re-reading from the beginning:
+
+```
+Continuing import #7 (attempt 2) from cursor 48,127
+```
+
+The position is only saved alongside the flush that durably writes the
+rows it covers, so a crash can never skip files that were not actually
+stored. It is cleared once the source completes, so a later re-import of
+the same category picks up files added since.
+
+Reading through the Commons API cannot resume this way — it pages on an
+opaque continue token that does not map onto individual files — so those
+imports restart, and the page-id match keeps the repeated work to a
+single `UPDATE` per file.
+
+Because resuming skips everything before the cursor, a file added to the
+category earlier in the ordering would not be seen. `--restart` drops the
+saved position and reads the whole source again.
 
 A category larger than `REPLICA_MAX_FILES` (120,000 by default) is
 refused outright rather than imported partway, because a truncated

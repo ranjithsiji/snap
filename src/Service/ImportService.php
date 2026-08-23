@@ -167,12 +167,30 @@ class ImportService
      *
      * @return array{result: ImportResult, warnings: list<string>, images: list<CampaignImage>}
      */
-    public function retryRoundSource(RoundSource $source): array
+    public function retryRoundSource(RoundSource $source, ?callable $onProgress = null): array
     {
         $source->recordRetry();
         $this->em->flush();
 
-        return $this->runImport($source->getRound(), $source);
+        return $this->runImport($source->getRound(), $source, $onProgress);
+    }
+
+    /**
+     * The round's last import, if it did not finish.
+     *
+     * A re-run continues that attempt rather than starting a new one:
+     * only the unfinished attempt carries a resume cursor, and beginning
+     * afresh each time would re-read the whole category however little
+     * was left to do.
+     */
+    public function resumableSource(Round $round): ?RoundSource
+    {
+        $source = $this->em->getRepository(RoundSource::class)->findOneBy(
+            ['round' => $round],
+            ['id' => 'DESC'],
+        );
+
+        return $source !== null && !$source->isComplete() ? $source : null;
     }
 
     /**
@@ -199,6 +217,9 @@ class ImportService
                 $round->getSourceCategory(),
                 $round->parsedFileList(),
                 $round->getSourceUrl(),
+                // Where the last attempt stopped, so a resumed import does
+                // not re-read what it already wrote.
+                $source->getResumeCursor() ?? 0,
             ) as $file) {
                 $processed++;
                 $pageIds[] = $file->pageId;
@@ -214,6 +235,12 @@ class ImportService
                 }
 
                 if (($processed % self::BATCH_SIZE) === 0) {
+                    // Advanced only alongside the flush that durably writes
+                    // the rows it covers; recording it earlier would let a
+                    // crash skip files that were never actually stored.
+                    // Null for API-sourced files, which carry no cursor.
+                    $source->recordResumeCursor($file->resumeCursor);
+
                     $this->em->flush();
                     $this->detachImported($campaign);
 
@@ -223,8 +250,10 @@ class ImportService
                 }
             }
         } catch (\Throwable $e) {
-            // Whatever was fetched before the failure is kept: the pool
-            // upserts on page id, so the retry picks up from here.
+            // Whatever was fetched before the failure is kept, along with
+            // the cursor recorded at the last flush — so a retry resumes
+            // from there rather than re-reading the category. The upsert
+            // still absorbs any overlap.
             $this->em->flush();
 
             $source->recordCounts($processed, $added);
@@ -311,7 +340,11 @@ class ImportService
     /**
      * Resolves any source description into a stream of Commons files.
      *
+     * Where the stream is keyed, the key is a resume cursor the caller can
+     * record; a list-based source is keyed by position and offers none.
+     *
      * @param list<string> $fileList
+     * @param int $after Resume point, honoured by the replica category path
      * @return iterable<CommonsFile>
      */
     private function fetchFilesFor(
@@ -319,6 +352,7 @@ class ImportService
         ?string $category,
         array $fileList,
         ?string $url,
+        int $after = 0,
     ): iterable {
         // A file-list URL is fetched over HTTP either way; only the lookup
         // of the resulting titles differs.
@@ -331,8 +365,12 @@ class ImportService
             return match ($type) {
                 // Streamed rather than collected: a large category would
                 // otherwise sit in memory in full while its entities are
-                // being written.
-                SourceType::Category => $this->replica->streamFilesInCategory((string) $category),
+                // being written. Keyed by cl_from, so an interrupted import
+                // can resume from where it stopped.
+                SourceType::Category => $this->replica->streamFilesInCategory(
+                    (string) $category,
+                    $after,
+                ),
                 SourceType::FileList => $this->replica->filesByTitle($fileList),
                 default => throw new RuntimeException('No usable source configured.'),
             };

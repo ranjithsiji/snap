@@ -180,14 +180,19 @@ try {
             $id = $args[0] ?? null;
 
             if ($id === null) {
-                echo "Usage: bin/console round:import <roundId> [--populate]\n";
+                echo "Usage: bin/console round:import <roundId> [--populate] [--restart]\n";
                 echo "\n";
                 echo "  Imports a round's own source directly on the server.\n";
                 echo "  Intended for categories too large to import inside a\n";
                 echo "  web request, which times out well before a category of\n";
                 echo "  tens of thousands is read.\n";
                 echo "\n";
+                echo "  An interrupted import resumes from where it stopped.\n";
+                echo "\n";
                 echo "  --populate  also add the imported files to the round\n";
+                echo "  --restart   ignore the saved position and read the\n";
+                echo "              whole category again, to pick up files\n";
+                echo "              added before the resume point\n";
                 exit(1);
             }
 
@@ -218,18 +223,40 @@ try {
             // Progress is written as the import runs rather than at the
             // end: a large category takes minutes, and a silent terminal
             // is indistinguishable from a hung process.
-            $outcome = $import->importRoundSource(
-                $round,
-                null,
-                static function (int $processed, int $added, int $updated): void {
-                    printf(
-                        "\r  %s file(s) read — %s added, %s updated",
-                        number_format($processed),
-                        number_format($added),
-                        number_format($updated),
-                    );
-                },
-            );
+            $progress = static function (int $processed, int $added, int $updated): void {
+                printf(
+                    "\r  %s file(s) read — %s added, %s updated",
+                    number_format($processed),
+                    number_format($added),
+                    number_format($updated),
+                );
+            };
+
+            $resumable = $import->resumableSource($round);
+            $restart = in_array('--restart', $args, true);
+
+            if ($resumable !== null && $restart) {
+                // Dropping the cursor makes the retry read from the start,
+                // which is the only way to pick up files that sort before
+                // where the last attempt stopped.
+                $resumable->clearResumeCursor();
+                $em->flush();
+            }
+
+            if ($resumable !== null) {
+                $cursor = $resumable->getResumeCursor();
+
+                printf(
+                    "Continuing import #%d (attempt %d)%s\n\n",
+                    $resumable->getId(),
+                    $resumable->getAttemptCount() + 1,
+                    $cursor !== null ? sprintf(' from cursor %s', number_format($cursor)) : ' from the start',
+                );
+
+                $outcome = $import->retryRoundSource($resumable, $progress);
+            } else {
+                $outcome = $import->importRoundSource($round, null, $progress);
+            }
 
             $result = $outcome['result'];
 

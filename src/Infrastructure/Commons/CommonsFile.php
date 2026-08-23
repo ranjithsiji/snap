@@ -23,7 +23,35 @@ final readonly class CommonsFile
         public ?string $mimeType,
         public ?string $uploader,
         public ?DateTimeImmutable $uploadedAt,
+        /**
+         * Where this file sat in its source, when the source can say.
+         *
+         * Set only by the replica reader, which pages a category on
+         * `cl_from` and so can name a point to resume from. The API pages
+         * on an opaque continue token that does not map onto individual
+         * files, so files fetched that way carry null and an interrupted
+         * API import starts over.
+         */
+        public ?int $resumeCursor = null,
     ) {
+    }
+
+    /** The same file, tagged with the cursor it was read at. */
+    public function withResumeCursor(int $cursor): self
+    {
+        return new self(
+            $this->pageId,
+            $this->title,
+            $this->fileUrl,
+            $this->descriptionUrl,
+            $this->thumbUrl,
+            $this->width,
+            $this->height,
+            $this->mimeType,
+            $this->uploader,
+            $this->uploadedAt,
+            $cursor,
+        );
     }
 
     /**
