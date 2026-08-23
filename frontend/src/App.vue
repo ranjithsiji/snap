@@ -21,8 +21,8 @@ async function logout() {
   <div class="app">
     <header class="topbar">
       <RouterLink :to="{ name: 'home' }" class="brand">
-        <span class="brand-mark">WL</span>
-        <span>Jury Tool</span>
+        <span class="brand-mark">S</span>
+        <span>Snap</span>
       </RouterLink>
 
       <nav v-if="session.isAuthenticated" class="topnav">
@@ -30,6 +30,13 @@ async function logout() {
         <RouterLink :to="{ name: 'projects' }">Projects</RouterLink>
         <RouterLink v-if="session.isOrganizer" :to="{ name: 'campaigns' }">Campaigns</RouterLink>
         <RouterLink v-if="session.isAdministrator" :to="{ name: 'admin' }">Administration</RouterLink>
+        <RouterLink :to="{ name: 'about' }">About</RouterLink>
+      </nav>
+
+      <!-- Signed-out visitors land on the login page, so About is the only
+           thing to offer them in the bar. -->
+      <nav v-else class="topnav">
+        <RouterLink :to="{ name: 'about' }">About</RouterLink>
       </nav>
 
       <div v-if="session.isAuthenticated" class="topbar-user">

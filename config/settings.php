@@ -25,7 +25,7 @@ $bool = static fn (?string $v, bool $default = false): bool => $v === null
 
 return [
     'app' => [
-        'name' => $env('APP_NAME', 'Wiki Loves Jury Tool'),
+        'name' => $env('APP_NAME', 'Snap'),
         'env' => $env('APP_ENV', 'dev'),
         'debug' => $bool($env('APP_DEBUG'), $env('APP_ENV', 'dev') !== 'prod'),
         'url' => rtrim($env('APP_URL', 'http://localhost:8080') ?? '', '/'),
@@ -82,7 +82,7 @@ return [
         // The Wikimedia API policy requires a descriptive, contactable agent.
         'user_agent' => $env(
             'COMMONS_USER_AGENT',
-            'WikiLovesJuryTool/1.0 (https://github.com/wikiloves/jurytool)'
+            'Snap/1.0 (https://snap.toolforge.org/)'
         ),
         'thumb_width' => (int) ($env('COMMONS_THUMB_WIDTH', '1024') ?? 1024),
         // Commons caps generator queries at 500 for API users.
