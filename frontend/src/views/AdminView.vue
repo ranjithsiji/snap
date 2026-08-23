@@ -13,6 +13,7 @@ import {
   CdxTabs,
   CdxTextInput,
 } from '@wikimedia/codex'
+import DataTable from '@/components/DataTable.vue'
 import { api } from '@/api'
 import { useSession } from '@/stores/session'
 import { formatNumber } from '@/format'
@@ -79,13 +80,59 @@ const projects = ref([])
 const campaigns = ref([])
 const rounds = ref([])
 
+// Column declarations. The table needs to know a key to sort and search
+// on; how a cell looks is still up to a #cell-<key> slot.
+const projectColumns = [
+  { key: 'name', label: 'Project' },
+  { key: 'campaignCount', label: 'Campaigns' },
+  { key: 'leadNames', label: 'Leads' },
+  { key: 'actions', label: '', sortable: false, align: 'end' },
+]
+
+const campaignColumns = [
+  { key: 'name', label: 'Campaign' },
+  { key: 'projectName', label: 'Project' },
+  { key: 'imageCount', label: 'Images' },
+  { key: 'actions', label: '', sortable: false, align: 'end' },
+]
+
+// The activity log is a feed rather than a table, so it keeps a plain
+// search of its own.
+const activitySearch = ref('')
+
+const filteredActivity = computed(() => {
+  const needle = activitySearch.value.trim().toLowerCase()
+
+  if (needle === '') {
+    return activity.value
+  }
+
+  return activity.value.filter((entry) =>
+    [entry.actor, entry.summary, entry.action, entry.ipAddress].some((field) =>
+      String(field ?? '').toLowerCase().includes(needle),
+    ),
+  )
+})
+
+const roundColumns = [
+  { key: 'name', label: 'Round' },
+  { key: 'campaignName', label: 'Campaign' },
+  { key: 'votingMethodLabel', label: 'Method' },
+  { key: 'state', label: 'State' },
+  { key: 'actions', label: '', sortable: false, align: 'end' },
+]
+
 async function loadStructure() {
   const [projectData, campaignData] = await Promise.all([
     api.get('/projects'),
     api.get('/campaigns'),
   ])
 
-  projects.value = projectData.projects
+  // Flattened for the table, which sorts and searches on plain values.
+  projects.value = projectData.projects.map((project) => ({
+    ...project,
+    leadNames: (project.leads ?? []).join(', '),
+  }))
   campaigns.value = campaignData.campaigns
 
   // There is no admin-wide rounds endpoint — rounds belong to campaigns,
@@ -381,167 +428,137 @@ async function createUser() {
 
     <!-- Projects -->
     <template v-else-if="tab === 'projects'">
-      <div v-if="projects.length === 0" class="card empty">
-        <p>No projects yet.</p>
-      </div>
-
-      <div v-else class="card table-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th>Project</th>
-              <th>Campaigns</th>
-              <th>Leads</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="project in projects" :key="project.id">
-              <td>
-                <a href="#" @click.prevent="router.push({ name: 'project', params: { id: project.id } })">
-                  {{ project.name }}
-                </a>
-              </td>
-              <td>{{ formatNumber(project.campaignCount ?? 0) }}</td>
-              <td>{{ (project.leads ?? []).join(', ') || '—' }}</td>
-              <td class="row-end">
-                <CdxButton
-                  action="destructive"
-                  weight="quiet"
-                  :disabled="busy"
-                  @click="pendingDelete = { kind: 'project', item: project }"
-                >
-                  Delete
-                </CdxButton>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        :columns="projectColumns"
+        :rows="projects"
+        search-placeholder="Search projects…"
+        empty-text="No projects yet."
+      >
+        <template #cell-name="{ row }">
+          <a href="#" @click.prevent="router.push({ name: 'project', params: { id: row.id } })">
+            {{ row.name }}
+          </a>
+        </template>
+        <template #cell-campaignCount="{ row }">
+          {{ formatNumber(row.campaignCount ?? 0) }}
+        </template>
+        <template #cell-leadNames="{ row }">
+          {{ row.leadNames || '—' }}
+        </template>
+        <template #cell-actions="{ row }">
+          <CdxButton
+            action="destructive"
+            weight="quiet"
+            :disabled="busy"
+            @click="pendingDelete = { kind: 'project', item: row }"
+          >
+            Delete
+          </CdxButton>
+        </template>
+      </DataTable>
     </template>
 
     <!-- Campaigns -->
     <template v-else-if="tab === 'campaigns'">
-      <div v-if="campaigns.length === 0" class="card empty">
-        <p>No campaigns yet.</p>
-      </div>
-
-      <div v-else class="card table-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th>Campaign</th>
-              <th>Project</th>
-              <th>Images</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="campaign in campaigns" :key="campaign.id">
-              <td>
-                <a href="#" @click.prevent="router.push({ name: 'campaign', params: { id: campaign.id } })">
-                  {{ campaign.name }}
-                </a>
-              </td>
-              <td>{{ campaign.projectName ?? '—' }}</td>
-              <td>{{ formatNumber(campaign.imageCount ?? 0) }}</td>
-              <td class="row-end">
-                <CdxButton
-                  action="destructive"
-                  weight="quiet"
-                  :disabled="busy"
-                  @click="pendingDelete = { kind: 'campaign', item: campaign }"
-                >
-                  Delete
-                </CdxButton>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        :columns="campaignColumns"
+        :rows="campaigns"
+        search-placeholder="Search campaigns…"
+        empty-text="No campaigns yet."
+      >
+        <template #cell-name="{ row }">
+          <a href="#" @click.prevent="router.push({ name: 'campaign', params: { id: row.id } })">
+            {{ row.name }}
+          </a>
+        </template>
+        <template #cell-imageCount="{ row }">
+          {{ formatNumber(row.imageCount ?? 0) }}
+        </template>
+        <template #cell-actions="{ row }">
+          <CdxButton
+            action="destructive"
+            weight="quiet"
+            :disabled="busy"
+            @click="pendingDelete = { kind: 'campaign', item: row }"
+          >
+            Delete
+          </CdxButton>
+        </template>
+      </DataTable>
     </template>
 
     <!-- Rounds -->
     <template v-else-if="tab === 'rounds'">
-      <div v-if="rounds.length === 0" class="card empty">
-        <p>No rounds yet.</p>
-      </div>
-
-      <div v-else class="card table-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th>Round</th>
-              <th>Campaign</th>
-              <th>Method</th>
-              <th>State</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="round in rounds" :key="round.id">
-              <td>
-                <a href="#" @click.prevent="router.push({ name: 'round', params: { id: round.id } })">
-                  {{ round.name }}
-                </a>
-              </td>
-              <td>{{ round.campaignName }}</td>
-              <td>{{ round.votingMethodLabel ?? round.votingMethod }}</td>
-              <td>
-                <CdxInfoChip :status="round.state === 'active' ? 'success' : 'notice'">
-                  {{ round.state }}
-                </CdxInfoChip>
-              </td>
-              <td class="row-end">
-                <CdxButton
-                  action="destructive"
-                  weight="quiet"
-                  :disabled="busy"
-                  @click="pendingDelete = { kind: 'round', item: round }"
-                >
-                  Delete
-                </CdxButton>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        :columns="roundColumns"
+        :rows="rounds"
+        search-placeholder="Search rounds…"
+        empty-text="No rounds yet."
+      >
+        <template #cell-name="{ row }">
+          <a href="#" @click.prevent="router.push({ name: 'round', params: { id: row.id } })">
+            {{ row.name }}
+          </a>
+        </template>
+        <template #cell-state="{ row }">
+          <CdxInfoChip :status="row.state === 'active' ? 'success' : 'notice'">
+            {{ row.state }}
+          </CdxInfoChip>
+        </template>
+        <template #cell-actions="{ row }">
+          <CdxButton
+            action="destructive"
+            weight="quiet"
+            :disabled="busy"
+            @click="pendingDelete = { kind: 'round', item: row }"
+          >
+            Delete
+          </CdxButton>
+        </template>
+      </DataTable>
     </template>
 
     <!-- Activity log -->
     <template v-else>
       <div class="row" style="margin-bottom: 1rem">
+        <CdxTextInput
+          v-model="activitySearch"
+          placeholder="Search the log…"
+          style="max-width: 22rem"
+        />
         <CdxSelect
           v-model:selected="actionFilter"
           :menu-items="actionOptions"
           style="max-width: 18rem"
         />
-        <span class="muted">{{ formatNumber(activityTotal) }} entries</span>
+        <span class="spacer"></span>
+        <span class="muted">
+          {{ formatNumber(filteredActivity.length) }} of
+          {{ formatNumber(activityTotal) }} entries
+        </span>
       </div>
 
-      <div class="card table-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th>When</th>
-              <th>Who</th>
-              <th>Action</th>
-              <th>What happened</th>
-              <th>IP</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="entry in activity" :key="entry.id">
-              <td class="muted" style="white-space: nowrap">
-                {{ new Date(entry.createdAt).toLocaleString() }}
-              </td>
-              <td><strong>{{ entry.actor }}</strong></td>
-              <td><code class="action-code">{{ entry.action }}</code></td>
-              <td>{{ entry.summary }}</td>
-              <td class="muted">{{ entry.ipAddress ?? '—' }}</td>
-            </tr>
-          </tbody>
-        </table>
+      <!-- A feed rather than a table. The five columns repeated
+           themselves — the action code says the same thing as the summary
+           beside it — and gave an IP address the same weight as what
+           actually happened. -->
+      <div v-if="filteredActivity.length === 0" class="card empty">
+        <p>Nothing matches.</p>
+      </div>
+
+      <div v-else class="card feed">
+        <div v-for="entry in filteredActivity" :key="entry.id" class="feed-row">
+          <div class="feed-main">
+            <span class="feed-actor">{{ entry.actor }}</span>
+            {{ entry.summary }}
+          </div>
+          <div class="feed-meta">
+            <span :title="entry.ipAddress ? `from ${entry.ipAddress}` : ''">
+              {{ new Date(entry.createdAt).toLocaleString() }}
+            </span>
+            <code class="action-code">{{ entry.action }}</code>
+          </div>
+        </div>
       </div>
     </template>
   </template>

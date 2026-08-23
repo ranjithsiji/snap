@@ -816,6 +816,45 @@ body {
   border-radius: var(--border-radius-base);
 }
 
+/* The activity log reads as a feed: what happened first, and the
+   timestamp and action code beneath it as supporting detail. Five equal
+   columns gave an IP address the same weight as the event itself. */
+.feed {
+  padding: 0;
+}
+
+.feed-row {
+  padding: var(--spacing-75) var(--spacing-100);
+  border-bottom: var(--border-subtle);
+}
+
+.feed-row:last-child {
+  border-bottom: 0;
+}
+
+.feed-main {
+  font-size: var(--font-size-small);
+}
+
+.feed-actor {
+  font-weight: var(--font-weight-bold);
+}
+
+.feed-actor::after {
+  content: ' — ';
+  font-weight: var(--font-weight-normal);
+  color: var(--color-subtle);
+}
+
+.feed-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-50);
+  margin-top: var(--spacing-25);
+  font-size: var(--font-size-x-small);
+  color: var(--color-subtle);
+}
+
 .revealed-password {
   font-family: var(--font-family-monospace);
   font-size: var(--font-size-medium);
