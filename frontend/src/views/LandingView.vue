@@ -105,58 +105,36 @@ const does = [
     <section class="tech">
       <h2 class="tech-title">Technical details</h2>
 
-      <div class="tech-grid">
-        <div class="tech-block">
-          <h3 class="tech-block-title">Built with</h3>
-          <ul class="tech-list">
-            <li>PHP 8.4 with Slim 4 and Doctrine ORM</li>
-            <li>Vue 3 and <a href="https://doc.wikimedia.org/codex/latest/">Codex</a>,
-              Wikimedia's design system</li>
-            <li>MariaDB, on the Toolforge tools cluster</li>
-            <li>Wikimedia OAuth 2.0 for sign-in</li>
-          </ul>
-        </div>
+      <dl class="tech-facts">
+        <dt>Deployment</dt>
+        <dd>
+          Deployed on
+          <a href="https://wikitech.wikimedia.org/wiki/Portal:Toolforge">Wikimedia Toolforge</a>
+        </dd>
 
-        <div class="tech-block">
-          <h3 class="tech-block-title">Where the data comes from</h3>
-          <ul class="tech-list">
-            <li>Entries are read from
-              <a href="https://commons.wikimedia.org/">Wikimedia Commons</a></li>
-            <li>Categories are queried against the Commons replica database,
-              falling back to the public API</li>
-            <li>Photographs are never copied — they are served from
-              Wikimedia and remain under their own licences</li>
-          </ul>
-        </div>
+        <dt>Interface</dt>
+        <dd>
+          Built with the
+          <a href="https://doc.wikimedia.org/codex/latest/">Codex</a>
+          design system
+        </dd>
 
-        <div class="tech-block">
-          <h3 class="tech-block-title">Source and issues</h3>
-          <ul class="tech-list">
-            <li><a href="https://github.com/ranjithsiji/snap">Source code on GitHub</a></li>
-            <li>
-              <a href="https://phabricator.wikimedia.org/tag/tool-snap/">Bugs and tasks on Phabricator</a>
-            </li>
-            <li><a href="https://toolsadmin.wikimedia.org/tools/id/snap">Tool page on Toolsadmin</a></li>
-            <li>Free software, for the Wikimedia community</li>
-          </ul>
-        </div>
+        <dt>Maintained by</dt>
+        <dd>
+          <a href="https://w.wiki/t9">Wikimedians of Kerala User Group</a>
+        </dd>
 
-        <div class="tech-block">
-          <h3 class="tech-block-title">Maintained by</h3>
-          <ul class="tech-list">
-            <li>
-              <a href="https://w.wiki/t9">Wikimedians of Kerala User Group</a>
-            </li>
-            <li>
-              Developed by <a href="https://w.wiki/tN">Ranjithsiji</a>
-            </li>
-            <li>
-              Hosted on
-              <a href="https://wikitech.wikimedia.org/wiki/Portal:Toolforge">Wikimedia Toolforge</a>
-            </li>
-          </ul>
-        </div>
-      </div>
+        <dt>Developed by</dt>
+        <dd>
+          <a href="https://w.wiki/tN">Ranjithsiji</a>
+        </dd>
+
+        <dt>License</dt>
+        <dd>
+          <a href="https://www.gnu.org/licenses/gpl-3.0.html">GNU GPL v3.0</a>
+          or later
+        </dd>
+      </dl>
     </section>
   </div>
 </template>
@@ -276,53 +254,48 @@ const does = [
 
 /* --- Technical details ----------------------------------------------- */
 
+/* Full width rather than centred on a column: the section is a short
+   list of facts, and it reads as a footer to the page. */
 .tech {
-  max-width: 60rem;
-  margin: 0 auto;
+  width: 100%;
   padding: var(--spacing-150) 0 var(--spacing-200);
   border-top: var(--border-base);
 }
 
 .tech-title {
-  margin: 0 0 var(--spacing-125);
+  margin: 0 0 var(--spacing-100);
   font-size: var(--font-size-x-large);
   font-weight: var(--font-weight-bold);
 }
 
-/* Four short blocks, so they sit on one row on a desktop and fold to two
-   and then one as the viewport narrows. */
-.tech-grid {
+/* A label column sized to its longest term, then the value taking the
+   rest of the width. */
+.tech-facts {
   display: grid;
-  gap: var(--spacing-150);
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: max-content 1fr;
+  gap: var(--spacing-50) var(--spacing-125);
+  margin: 0;
+  font-size: var(--font-size-small);
 }
 
-@media (max-width: 64rem) {
-  .tech-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (max-width: 36rem) {
-  .tech-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-.tech-block-title {
-  margin: 0 0 var(--spacing-50);
-  font-size: var(--font-size-medium);
+.tech-facts dt {
   font-weight: var(--font-weight-bold);
 }
 
-.tech-list {
+.tech-facts dd {
   margin: 0;
-  padding-left: var(--spacing-100);
-  font-size: var(--font-size-small);
   color: var(--color-subtle);
 }
 
-.tech-list li {
-  margin-bottom: var(--spacing-25);
+/* Stacked on a phone, where two columns leave the values too narrow. */
+@media (max-width: 36rem) {
+  .tech-facts {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-25);
+  }
+
+  .tech-facts dd {
+    margin-bottom: var(--spacing-50);
+  }
 }
 </style>

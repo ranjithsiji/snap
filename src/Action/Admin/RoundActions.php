@@ -569,8 +569,35 @@ class RoundActions
     {
         $round = $this->find($args['id']);
 
+        $name = $round->getName();
+        $id = $round->getId();
+        $actorId = $this->actor($request)?->getId();
+
+        // Counted with a query rather than through $round->getImages().
+        // Reading that collection loads the rows into the entity manager,
+        // and the database — not Doctrine — is what cascades the delete, so
+        // they would survive the remove() and the next flush would try to
+        // re-persist them against a round that is gone.
+        $imageCount = (int) $this->em->createQuery(
+            'SELECT COUNT(i.id) FROM ' . RoundImage::class . ' i WHERE i.round = :round'
+        )->setParameter('round', $round)->getSingleScalarResult();
+
         $this->em->remove($round);
         $this->em->flush();
+
+        // Anything the database cascaded away must not linger in the
+        // identity map when the log below flushes.
+        $this->em->clear();
+
+        $this->log->record(
+            $actorId === null ? null : $this->em->getRepository(User::class)->find($actorId),
+            'round.delete',
+            sprintf('Deleted round "%s" and its %d image(s)', $name, $imageCount),
+            'Round',
+            $id,
+            ['images' => $imageCount],
+            $request,
+        );
 
         return Json::write($response, ['ok' => true]);
     }

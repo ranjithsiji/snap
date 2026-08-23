@@ -272,8 +272,11 @@ class CampaignActions
             $request,
         );
 
+        // withRounds, because the campaign screen replaces what it is
+        // showing with this response. Without them the rounds it has
+        // already rendered lose their data and the page breaks.
         return Json::write($response, [
-            'campaign' => Presenter::campaign($campaign),
+            'campaign' => Presenter::campaign($campaign, withRounds: true),
             'import' => $result->toArray(),
         ]);
     }
@@ -326,14 +329,21 @@ class CampaignActions
 
         $name = $campaign->getName();
         $id = $campaign->getId();
+        $actorId = $this->actor($request)?->getId();
 
         $this->em->remove($campaign);
         $this->em->flush();
 
+        // The rounds and images beneath this campaign are removed by the
+        // database, not by Doctrine, so any that were loaded would still be
+        // managed here and the log's flush would try to re-persist them
+        // against a campaign that no longer exists.
+        $this->em->clear();
+
         $this->log->record(
-            $this->actor($request),
+            $actorId === null ? null : $this->em->getRepository(User::class)->find($actorId),
             'campaign.delete',
-            sprintf('Deleted campaign "%s"', $name),
+            sprintf('Deleted campaign "%s" and everything beneath it', $name),
             'Campaign',
             $id,
             request: $request,

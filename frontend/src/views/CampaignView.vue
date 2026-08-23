@@ -124,7 +124,9 @@ async function reimport() {
       <div>
         <h2 class="section-title">Rounds</h2>
 
-        <div v-if="campaign.rounds.length === 0" class="card empty">
+        <!-- Guarded: an endpoint returning the campaign without its rounds
+             would otherwise blank the whole page. -->
+        <div v-if="(campaign.rounds ?? []).length === 0" class="card empty">
           <p>No rounds yet.</p>
         </div>
 

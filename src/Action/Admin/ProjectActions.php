@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace JuryTool\Action\Admin;
 
 use Doctrine\ORM\EntityManagerInterface;
+use JuryTool\Domain\Entity\Campaign;
 use JuryTool\Domain\Entity\Project;
 use JuryTool\Domain\Entity\RoleAssignment;
 use JuryTool\Domain\Entity\User;
@@ -229,25 +230,40 @@ class ProjectActions
 
         $project = $this->find($args['id']);
 
-        if (!$project->getCampaigns()->isEmpty()) {
-            throw DomainException::badRequest(
-                'This project still has campaigns. Delete or archive them first.'
-            );
-        }
-
         $name = $project->getName();
         $id = $project->getId();
+
+        // Counted with a query rather than through $project->getCampaigns().
+        // Reading that collection loads the campaigns into the entity
+        // manager, and the database — not Doctrine — is what cascades the
+        // delete, so those loaded entities survive the remove() and the
+        // next flush tries to re-persist them against a project that is
+        // gone: "a new entity was found through the relationship".
+        $campaignCount = (int) $this->em->createQuery(
+            'SELECT COUNT(c.id) FROM ' . Campaign::class . ' c WHERE c.project = :project'
+        )->setParameter('project', $project)->getSingleScalarResult();
 
         $this->em->remove($project);
         $this->em->flush();
 
+        // Cleared so that anything the delete cascaded away in the database
+        // is not still sitting in the identity map when the log below
+        // flushes. That detaches the actor too, so it is re-read.
+        $this->em->clear();
+        $actor = $this->em->getRepository(User::class)->find($user->getId());
+
         $this->log->record(
-            $user,
+            $actor,
             'project.delete',
-            sprintf('Deleted project "%s"', $name),
+            sprintf(
+                'Deleted project "%s" and %d campaign(s) beneath it',
+                $name,
+                $campaignCount,
+            ),
             'Project',
             $id,
-            request: $request,
+            ['campaigns' => $campaignCount],
+            $request,
         );
 
         return Json::write($response, ['ok' => true]);

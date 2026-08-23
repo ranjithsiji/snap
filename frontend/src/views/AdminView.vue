@@ -73,9 +73,87 @@ async function loadActivity() {
   knownActions.value = data.actions
 }
 
+// --- Structure: projects, campaigns and rounds -------------------------
+
+const projects = ref([])
+const campaigns = ref([])
+const rounds = ref([])
+
+async function loadStructure() {
+  const [projectData, campaignData] = await Promise.all([
+    api.get('/projects'),
+    api.get('/campaigns'),
+  ])
+
+  projects.value = projectData.projects
+  campaigns.value = campaignData.campaigns
+
+  // There is no admin-wide rounds endpoint — rounds belong to campaigns,
+  // so they are gathered from the campaigns just listed.
+  const lists = await Promise.all(
+    campaigns.value.map(async (campaign) => {
+      const data = await api.get(`/campaigns/${campaign.id}`)
+
+      return (data.campaign.rounds ?? []).map((round) => ({
+        ...round,
+        campaignName: campaign.name,
+      }))
+    }),
+  )
+
+  rounds.value = lists.flat()
+}
+
+/**
+ * What is about to be deleted, held while the confirmation is open.
+ *
+ * Deleting cascades: a project takes its campaigns, their rounds, the
+ * images imported for them and every vote and comment recorded against
+ * those. None of it is recoverable, so the dialog says so in those terms
+ * rather than asking a generic "are you sure".
+ */
+const pendingDelete = ref(null)
+
+const deleteWarning = computed(() => {
+  const kind = pendingDelete.value?.kind
+
+  if (kind === 'project') {
+    return 'This also deletes every campaign in the project, their rounds, the images imported for them, and every vote, ranking and comment the jury recorded.'
+  }
+
+  if (kind === 'campaign') {
+    return 'This also deletes the campaign’s rounds, the images imported for it, and every vote, ranking and comment the jury recorded.'
+  }
+
+  return 'This also deletes the images imported into the round and every vote, ranking and comment the jury recorded against them.'
+})
+
+async function performDelete() {
+  const { kind, item } = pendingDelete.value
+  const paths = { project: 'projects', campaign: 'campaigns', round: 'rounds' }
+
+  busy.value = true
+  error.value = null
+  notice.value = null
+
+  try {
+    await api.delete(`/${paths[kind]}/${item.id}`)
+    pendingDelete.value = null
+    notice.value = `Deleted ${kind} “${item.name}”.`
+
+    // Everything below the deleted row has gone too, so all three lists
+    // are reloaded rather than only the one on screen.
+    await Promise.all([loadStructure(), loadOverview()])
+  } catch (e) {
+    error.value = e.message
+  } finally {
+    busy.value = false
+  }
+}
+
 onMounted(async () => {
   try {
-    await Promise.all([loadOverview(), loadUsers(), loadActivity()])
+    await Promise.all([loadOverview(), loadUsers(), loadActivity(), loadStructure()])
   } catch (e) {
     error.value = e.message
   } finally {
@@ -162,6 +240,9 @@ async function createUser() {
     <CdxTabs v-model:active="tab" framed style="margin-bottom: 1rem">
       <CdxTab name="overview" label="Overview" />
       <CdxTab name="users" :label="`Users (${users.length})`" />
+      <CdxTab name="projects" :label="`Projects (${projects.length})`" />
+      <CdxTab name="campaigns" :label="`Campaigns (${campaigns.length})`" />
+      <CdxTab name="rounds" :label="`Rounds (${rounds.length})`" />
       <CdxTab name="activity" :label="`Activity (${activityTotal})`" />
     </CdxTabs>
 
@@ -298,6 +379,135 @@ async function createUser() {
       </div>
     </template>
 
+    <!-- Projects -->
+    <template v-else-if="tab === 'projects'">
+      <div v-if="projects.length === 0" class="card empty">
+        <p>No projects yet.</p>
+      </div>
+
+      <div v-else class="card table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Project</th>
+              <th>Campaigns</th>
+              <th>Leads</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="project in projects" :key="project.id">
+              <td>
+                <a href="#" @click.prevent="router.push({ name: 'project', params: { id: project.id } })">
+                  {{ project.name }}
+                </a>
+              </td>
+              <td>{{ formatNumber(project.campaignCount ?? 0) }}</td>
+              <td>{{ (project.leads ?? []).join(', ') || '—' }}</td>
+              <td class="row-end">
+                <CdxButton
+                  action="destructive"
+                  weight="quiet"
+                  :disabled="busy"
+                  @click="pendingDelete = { kind: 'project', item: project }"
+                >
+                  Delete
+                </CdxButton>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </template>
+
+    <!-- Campaigns -->
+    <template v-else-if="tab === 'campaigns'">
+      <div v-if="campaigns.length === 0" class="card empty">
+        <p>No campaigns yet.</p>
+      </div>
+
+      <div v-else class="card table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Campaign</th>
+              <th>Project</th>
+              <th>Images</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="campaign in campaigns" :key="campaign.id">
+              <td>
+                <a href="#" @click.prevent="router.push({ name: 'campaign', params: { id: campaign.id } })">
+                  {{ campaign.name }}
+                </a>
+              </td>
+              <td>{{ campaign.projectName ?? '—' }}</td>
+              <td>{{ formatNumber(campaign.imageCount ?? 0) }}</td>
+              <td class="row-end">
+                <CdxButton
+                  action="destructive"
+                  weight="quiet"
+                  :disabled="busy"
+                  @click="pendingDelete = { kind: 'campaign', item: campaign }"
+                >
+                  Delete
+                </CdxButton>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </template>
+
+    <!-- Rounds -->
+    <template v-else-if="tab === 'rounds'">
+      <div v-if="rounds.length === 0" class="card empty">
+        <p>No rounds yet.</p>
+      </div>
+
+      <div v-else class="card table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Round</th>
+              <th>Campaign</th>
+              <th>Method</th>
+              <th>State</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="round in rounds" :key="round.id">
+              <td>
+                <a href="#" @click.prevent="router.push({ name: 'round', params: { id: round.id } })">
+                  {{ round.name }}
+                </a>
+              </td>
+              <td>{{ round.campaignName }}</td>
+              <td>{{ round.votingMethodLabel ?? round.votingMethod }}</td>
+              <td>
+                <CdxInfoChip :status="round.state === 'active' ? 'success' : 'notice'">
+                  {{ round.state }}
+                </CdxInfoChip>
+              </td>
+              <td class="row-end">
+                <CdxButton
+                  action="destructive"
+                  weight="quiet"
+                  :disabled="busy"
+                  @click="pendingDelete = { kind: 'round', item: round }"
+                >
+                  Delete
+                </CdxButton>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </template>
+
     <!-- Activity log -->
     <template v-else>
       <div class="row" style="margin-bottom: 1rem">
@@ -367,6 +577,30 @@ async function createUser() {
 
     <CdxMessage type="notice" inline>
       A strong password will be generated and shown to you once.
+    </CdxMessage>
+  </CdxDialog>
+
+  <!-- Deletion cascades, so the dialog names what else goes rather than
+       asking a generic "are you sure". -->
+  <CdxDialog
+    :open="pendingDelete !== null"
+    :title="`Delete ${pendingDelete?.kind}?`"
+    :primary-action="{
+      label: 'Delete permanently',
+      actionType: 'destructive',
+      disabled: busy,
+    }"
+    :default-action="{ label: 'Cancel' }"
+    @primary="performDelete"
+    @default="pendingDelete = null"
+    @update:open="(open) => { if (!open) pendingDelete = null }"
+  >
+    <p style="margin-top: 0">
+      <strong>{{ pendingDelete?.item?.name }}</strong>
+    </p>
+
+    <CdxMessage type="warning" inline>
+      {{ deleteWarning }} This cannot be undone.
     </CdxMessage>
   </CdxDialog>
 </template>
