@@ -14,6 +14,14 @@
 # Safe to re-run: every step either is idempotent or is a no-op when
 # already correct.
 
+# Re-executes under bash when started with `sh script.sh`. Toolforge's
+# /bin/sh is dash, which has no BASH_SOURCE — the path below would expand
+# to nothing, the script would resolve its own location as /, and it would
+# run against the wrong directory rather than stopping.
+if [ -z "${BASH_VERSION:-}" ]; then
+    exec bash "$0" "$@"
+fi
+
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -36,7 +44,28 @@ fi
 say "Installing PHP dependencies"
 # Toolforge has no build step for PHP, so dependencies are installed in
 # place. --no-dev keeps PHPUnit and friends out of a public docroot.
-composer install --no-dev --optimize-autoloader --no-interaction
+#
+# Without vendor/ the site serves nothing but a 500: bootstrap.php
+# require_once's the autoloader before anything can report a friendlier
+# error. So this is checked rather than assumed.
+if command -v composer >/dev/null 2>&1; then
+    composer install --no-dev --optimize-autoloader --no-interaction
+elif [ -f composer.phar ]; then
+    php composer.phar install --no-dev --optimize-autoloader --no-interaction
+else
+    echo "ERROR: composer is not installed." >&2
+    echo "       Without it there is no vendor/autoload.php and every" >&2
+    echo "       request fails with a 500. Install it into the tool:" >&2
+    echo "         cd $REPO" >&2
+    echo "         curl -sS https://getcomposer.org/installer | php" >&2
+    echo "         php composer.phar install --no-dev --optimize-autoloader" >&2
+    exit 1
+fi
+
+if [ ! -f vendor/autoload.php ]; then
+    echo "ERROR: composer finished but vendor/autoload.php is still missing." >&2
+    exit 1
+fi
 
 say "Building the frontend"
 # Vite writes straight into public/, which is what public_html points at.
