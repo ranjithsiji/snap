@@ -11,6 +11,9 @@ importers:
       '@wikimedia/codex':
         specifier: ^2.6.2
         version: 2.6.2(vue@3.5.41)
+      '@wikimedia/codex-design-tokens':
+        specifier: ^2.6.2
+        version: 2.6.2
       '@wikimedia/codex-icons':
         specifier: ^2.6.2
         version: 2.6.2
@@ -408,6 +411,10 @@ packages:
 
   '@vue/shared@3.5.41':
     resolution: {integrity: sha512-IOnwSCma8j+9xJT6b8H0dEYidC80NsYmNMlZxRsukYcSoGaDBohog5hDxzeUXdFeGWFA++vWvxqOmrr96VlqMA==}
+
+  '@wikimedia/codex-design-tokens@2.6.2':
+    resolution: {integrity: sha512-gbMMV4Nw/fTsZdWiaSqWwP7F4V6lctoQA6zfuy/hGppQlU29BetT4suBuBHhOGW+Y3RohljhkAQXunKREhFVvA==}
+    engines: {node: '>=24.14.1', npm: '>=11.10.0'}
 
   '@wikimedia/codex-icons@2.6.2':
     resolution: {integrity: sha512-civbR6I12sCTua9t8oPNqVBCHAF30x9rQT5kYIYgBR6hhcBL9NhzYdSLgjROpnkprt1rCVKRzMEBGBae5oNauw==}
@@ -811,6 +818,8 @@ snapshots:
       '@vue/shared': 3.5.41
 
   '@vue/shared@3.5.41': {}
+
+  '@wikimedia/codex-design-tokens@2.6.2': {}
 
   '@wikimedia/codex-icons@2.6.2': {}
 

@@ -1,7 +1,14 @@
-/* Codex provides the component styles and design tokens; this file only
-   adds the layout scaffolding around them, expressed in Codex tokens so
-   the two stay visually consistent. */
+/* Codex ships its design tokens separately from its component styles,
+   and the components are written entirely in terms of those tokens —
+   var(--spacing-100), var(--border-base), var(--color-base) and so on.
+   Without the token definitions every one of those references resolves
+   to nothing, so padding, borders and colour all disappear and the page
+   renders as bare HTML. The tokens must therefore come first.
 
+   This file then adds the layout scaffolding around Codex, expressed in
+   the same tokens so the two stay visually consistent. */
+
+@import '@wikimedia/codex-design-tokens/theme-wikimedia-ui.css';
 @import '@wikimedia/codex/dist/codex.style.css';
 
 body {
