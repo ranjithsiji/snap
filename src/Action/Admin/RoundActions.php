@@ -272,7 +272,18 @@ class RoundActions
         $population = null;
 
         if (Json::bool($body, 'populate', true)) {
-            $population = $this->population->populateFromCampaignPool($round)->toArray();
+            // A round that names its own category is filled from it. Only a
+            // round without one falls back to the campaign pool, which is
+            // how a round derived from an earlier one is filled — asking
+            // for the pool unconditionally failed with "campaign images
+            // have not been imported yet" now that campaigns no longer
+            // import anything themselves.
+            if ($round->hasOwnSource()) {
+                $outcome = $this->import->importRoundSource($round, $this->actor($request));
+                $population = $this->population->populate($round, $outcome['images'])->toArray();
+            } elseif ($campaign->hasBeenImported()) {
+                $population = $this->population->populateFromCampaignPool($round)->toArray();
+            }
         }
 
         $this->log->record(

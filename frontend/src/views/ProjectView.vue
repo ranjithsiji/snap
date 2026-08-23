@@ -282,13 +282,14 @@ async function createCampaign() {
         <CdxTextInput v-model="campaign.year" input-type="number" />
       </CdxField>
 
-      <CdxField>
-        <template #label>Commons category</template>
-        <template #description>
-          The category gathering this edition's entries. You can import the images afterwards.
-        </template>
-        <CdxTextInput v-model="campaign.sourceCategory" placeholder="Images from …" />
-      </CdxField>
+      <!-- No category here: each round gathers its own. A campaign such as
+           "WLE 2026 in India" is judged as parallel rounds for Trees and
+           Rivers, drawing from different categories, so asking once at
+           this level could only ever describe one of them. -->
+      <CdxMessage type="notice" inline>
+        Images are imported per round, so each round can draw from its own
+        Commons category.
+      </CdxMessage>
     </CdxDialog>
   </template>
 </template>

@@ -163,6 +163,55 @@ class CommonsClient
         return $users;
     }
 
+    /**
+     * Commons categories matching a prefix, with how many files each holds.
+     *
+     * Typing a category by hand is how an import silently returns nothing:
+     * "Images from Wiki Loves Earth 2026" and "Images from Wiki Loves Earth
+     * 2026 in India" differ by four words, and the wrong one is a valid
+     * category that simply has no files. The count is returned alongside
+     * the name so the choice can be made on evidence.
+     *
+     * @return list<array{name: string, files: int}>
+     */
+    public function searchCategories(string $prefix, int $limit = 10): array
+    {
+        $prefix = trim(preg_replace('/^Category:/i', '', trim($prefix)) ?? '');
+
+        if ($prefix === '') {
+            return [];
+        }
+
+        // allcategories enumerates category pages by prefix; acprop=size
+        // carries the file count, so no second request is needed.
+        $response = $this->request([
+            'action' => 'query',
+            'list' => 'allcategories',
+            'acprefix' => $prefix,
+            'aclimit' => (string) max(1, min($limit, 50)),
+            'acprop' => 'size',
+        ]);
+
+        $categories = [];
+
+        foreach ($response['query']['allcategories'] ?? [] as $category) {
+            // formatversion=2 returns the title in 'category'; older
+            // shapes put it in '*'.
+            $name = $category['category'] ?? $category['*'] ?? null;
+
+            if ($name === null) {
+                continue;
+            }
+
+            $categories[] = [
+                'name' => str_replace('_', ' ', (string) $name),
+                'files' => (int) ($category['files'] ?? 0),
+            ];
+        }
+
+        return $categories;
+    }
+
     /** Whether a Commons account with this exact name exists. */
     public function userExists(string $username): bool
     {

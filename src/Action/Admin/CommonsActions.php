@@ -58,4 +58,18 @@ class CommonsActions
             'users' => $this->commons->searchUsers($prefix, 10),
         ]);
     }
+
+    /** Categories matching a prefix, for the source autocomplete. */
+    public function searchCategories(Request $request, Response $response): Response
+    {
+        $prefix = trim((string) ($request->getQueryParams()['q'] ?? ''));
+
+        if ($prefix === '') {
+            return Json::write($response, ['categories' => []]);
+        }
+
+        return Json::write($response, [
+            'categories' => $this->commons->searchCategories($prefix, 15),
+        ]);
+    }
 }

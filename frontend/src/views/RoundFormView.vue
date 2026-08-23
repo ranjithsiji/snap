@@ -12,6 +12,7 @@ import {
   CdxTextArea,
   CdxTextInput,
 } from '@wikimedia/codex'
+import CommonsLookup from '@/components/CommonsLookup.vue'
 import { api } from '@/api'
 
 const props = defineProps({
@@ -33,6 +34,11 @@ const form = ref({
   votingDeadline: '',
   votingMethod: 'yesno',
   maxRating: 5,
+  // Each round gathers its own images: a campaign is judged as parallel
+  // rounds drawing from different categories, so the source belongs here
+  // rather than once at the campaign.
+  sourceType: 'category',
+  sourceCategory: '',
   details: '',
   showOwnStatistics: false,
   quorum: 1,
@@ -100,6 +106,8 @@ onMounted(async () => {
       votingDeadline: round.votingDeadline ? round.votingDeadline.slice(0, 10) : '',
       votingMethod: round.votingMethod,
       maxRating: round.maxRating,
+      sourceType: round.sourceType ?? 'category',
+      sourceCategory: round.sourceCategory ?? '',
       details: round.details ?? '',
       showOwnStatistics: round.showOwnStatistics,
       quorum: round.quorum,
@@ -180,6 +188,21 @@ async function submit() {
           <template #label>Maximum rating</template>
           <template #description>Highest number of stars a juror can award (2–10).</template>
           <CdxTextInput v-model="form.maxRating" input-type="number" min="2" max="10" />
+        </CdxField>
+
+        <CdxField>
+          <template #label>Commons category</template>
+          <template #description>
+            The category this round draws its images from. Suggestions show
+            how many files each holds, so an empty or near-miss category is
+            visible before importing. Leave blank to inherit from a previous
+            round instead.
+          </template>
+          <CommonsLookup
+            v-model="form.sourceCategory"
+            kind="categories"
+            placeholder="Images from Wiki Loves…"
+          />
         </CdxField>
 
         <CdxField>

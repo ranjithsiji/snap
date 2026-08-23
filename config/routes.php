@@ -84,6 +84,7 @@ return function (App $app): void {
             $org->post('/campaigns/{id}/organizers', [CampaignActions::class, 'appointOrganizer']);
             $org->delete('/campaigns/{id}/organizers/{userId}', [CampaignActions::class, 'removeOrganizer']);
             $org->get('/commons/users', [CommonsActions::class, 'searchUsers']);
+            $org->get('/commons/categories', [CommonsActions::class, 'searchCategories']);
             // Whether imports are running off the replica or the API.
             $org->get('/commons/status', [CommonsActions::class, 'status']);
 

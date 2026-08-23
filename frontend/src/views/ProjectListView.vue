@@ -11,6 +11,7 @@ import {
   CdxTextArea,
   CdxTextInput,
 } from '@wikimedia/codex'
+import CommonsLookup from '@/components/CommonsLookup.vue'
 import { api } from '@/api'
 import { formatNumber } from '@/format'
 
@@ -145,7 +146,7 @@ async function create() {
         The Wikimedia username of the person who will run this project. They can be appointed
         later, but a project cannot create campaigns without one.
       </template>
-      <CdxTextInput v-model="form.lead" placeholder="Username" />
+      <CommonsLookup v-model="form.lead" kind="users" placeholder="Search Commons users…" />
     </CdxField>
 
     <CdxField>
