@@ -13,6 +13,8 @@ export default defineConfig({
   },
   build: {
     outDir: '../public',
+    // public/ also holds index.php, the PHP front controller, which is
+    // not Vite's to delete.
     emptyOutDir: false,
     assetsDir: 'assets',
   },

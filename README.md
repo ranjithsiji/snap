@@ -75,9 +75,23 @@ git clone https://github.com/ranjithsiji/snap.git ~/snap
 cd ~/snap && ./bin/toolforge-deploy.sh
 ```
 
-The script installs dependencies, builds the frontend, migrates, links
-the docroot and the lighttpd config, and restarts the web service. It is
-safe to re-run for each subsequent deploy.
+The script installs PHP dependencies, migrates, links the docroot and the
+lighttpd config, and restarts the web service. It is safe to re-run for
+each subsequent deploy.
+
+**The frontend is not built on the server.** Toolforge has no Node
+available to the tool, so `public/` — Vite's output — is committed to the
+repository, which is what makes the tool deployable by `git pull` alone.
+Rebuild and commit it with any frontend change:
+
+```bash
+cd frontend && pnpm install && pnpm run build
+git add public && git commit -m "Rebuild the frontend" && git push
+```
+
+Forgetting this is quiet rather than loud: the server keeps serving the
+previously committed bundle, so the deploy appears to succeed and the
+change simply is not there.
 
 **Database credentials are not configured.** Toolforge issues one
 credential pair in `~/replica.my.cnf`, and it opens both the tool's own

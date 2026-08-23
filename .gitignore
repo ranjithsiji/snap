@@ -8,10 +8,11 @@
 # database credentials, so never let them be committed.
 replica.my.cnf
 
-# Vite builds the SPA straight into public/; only the PHP front controller
-# and static extras are tracked.
-/public/assets/
-/public/index.html
+# Vite's output in public/ IS committed, unusually for build artefacts.
+# Toolforge has no Node available to the tool, so the SPA is built on a
+# developer machine and shipped in the repository — that is what makes
+# this deployable by `git pull` alone. Rebuild and commit public/ with any
+# frontend change, or the served bundle silently stays at the old one.
 
 /frontend/node_modules/
 /frontend/dist/

@@ -1,0 +1,1 @@
+function a(t){if(!t)return"No deadline";const r=new Date(t),n=r.toISOString().slice(0,10),e=Math.ceil((r-new Date)/864e5);return e<0?`${n} · closed`:e===0?`${n} · closes today`:`${n} · in ${e} day${e===1?"":"s"}`}function o(t){return typeof t=="number"?t.toLocaleString():"0"}function f(t){return t?t>=1e6?`${(t/1e6).toFixed(1)} MP`:o(t):"—"}export{o as a,f as b,a as f};

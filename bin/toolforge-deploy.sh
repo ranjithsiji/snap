@@ -67,14 +67,26 @@ if [ ! -f vendor/autoload.php ]; then
     exit 1
 fi
 
-say "Building the frontend"
-# Vite writes straight into public/, which is what public_html points at.
-if command -v pnpm >/dev/null 2>&1; then
+say "Checking the frontend build"
+# The built SPA is committed, because Toolforge has no Node for the tool
+# to build with. So the normal case here is that there is nothing to do
+# and pnpm is absent — only its absence *and* a missing build is a
+# problem.
+if [ ! -f public/index.html ]; then
+    echo "ERROR: public/index.html is missing — the SPA has not been built." >&2
+    echo "       It is built on a developer machine and committed, since" >&2
+    echo "       Toolforge has no Node. On your own machine run:" >&2
+    echo "         cd frontend && pnpm install && pnpm run build" >&2
+    echo "         git add public && git commit && git push" >&2
+    echo "       then pull here and re-run this script." >&2
+    exit 1
+fi
+
+if command -v pnpm >/dev/null 2>&1 && [ "${REBUILD_FRONTEND:-}" = "1" ]; then
+    say "Rebuilding the frontend (REBUILD_FRONTEND=1)"
     (cd frontend && pnpm install --frozen-lockfile && pnpm run build)
 else
-    echo "pnpm not found. Build locally and commit public/, or install it:" >&2
-    echo "  npm install -g pnpm" >&2
-    exit 1
+    echo "  Using the committed build in public/ ($(find public/assets -name '*.js' 2>/dev/null | wc -l) chunks)."
 fi
 
 say "Running database migrations"
