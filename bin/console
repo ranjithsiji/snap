@@ -41,8 +41,46 @@ try {
             break;
 
         case 'schema:update':
-            (new SchemaTool($em))->updateSchema($metadata());
-            echo "Schema updated.\n";
+            $tool = new SchemaTool($em);
+            $statements = $tool->getUpdateSchemaSql($metadata());
+
+            if ($statements === []) {
+                echo "Schema is already up to date.\n";
+
+                break;
+            }
+
+            // ORM 3 always compares against the whole database, so any
+            // table it does not know about is diffed away. This runs on
+            // every deploy, and a DROP going through unannounced is how a
+            // round's votes disappear — so destructive statements are
+            // shown and refused unless asked for explicitly.
+            $destructive = array_values(array_filter(
+                $statements,
+                static fn (string $sql): bool => (bool) preg_match(
+                    '/^\s*(DROP\s+TABLE|ALTER\s+TABLE\s+\S+\s+DROP\b)/i',
+                    $sql,
+                ),
+            ));
+
+            if ($destructive !== [] && !in_array('--force', $args, true)) {
+                echo "Refusing to apply " . count($destructive) . " destructive statement(s):\n\n";
+
+                foreach ($destructive as $sql) {
+                    echo "  {$sql}\n";
+                }
+
+                echo "\nThese drop tables or columns. If that is intended, re-run with\n";
+                echo "--force. Otherwise the entity mappings and the database have\n";
+                echo "diverged, and applying this would lose data.\n";
+                exit(1);
+            }
+
+            foreach ($statements as $sql) {
+                $em->getConnection()->executeStatement($sql);
+            }
+
+            printf("Schema updated (%d statement(s)).\n", count($statements));
 
             break;
 
@@ -310,7 +348,8 @@ try {
 
             Schema
               schema:create              Create all tables
-              schema:update              Apply entity changes to the database
+              schema:update [--force]    Apply entity changes to the database
+                                         (--force allows drops)
               schema:drop --force        Drop all tables
               schema:sql                 Print the CREATE statements
 

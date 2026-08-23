@@ -89,8 +89,28 @@ else
     echo "  Using the committed build in public/ ($(find public/assets -name '*.js' 2>/dev/null | wc -l) chunks)."
 fi
 
-say "Running database migrations"
-php vendor/bin/doctrine-migrations migrations:migrate --no-interaction
+say "Updating the database schema"
+# The schema is derived from the entity mappings rather than from a
+# migration history: doctrine-migrations is a dependency, but no
+# migrations have been written and there is no configuration file for it,
+# so calling it here only fails.
+#
+# schema:update adds new tables and columns. It stops rather than apply a
+# DROP, which ORM 3 will generate for anything in the database that the
+# entity mappings do not describe — an unattended deploy is the last place
+# a table should disappear without being asked about.
+php bin/console schema:update
+
+# Everything past here writes into the tool's home directory and drives
+# the Toolforge webservice, so it is meaningless — and untidy — anywhere
+# else. Running the script locally still exercises every step above.
+if ! command -v toolforge >/dev/null 2>&1; then
+    say "Not on Toolforge"
+    echo "  Dependencies, frontend and schema are up to date."
+    echo "  Skipping the docroot symlink, lighttpd config and restart,"
+    echo "  which only apply to a Toolforge deployment."
+    exit 0
+fi
 
 say "Linking the document root"
 # lighttpd serves $HOME/public_html; point it at the built SPA. Replaced
