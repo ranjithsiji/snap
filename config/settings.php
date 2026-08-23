@@ -23,6 +23,14 @@ $bool = static fn (?string $v, bool $default = false): bool => $v === null
     ? $default
     : in_array(strtolower($v), ['1', 'true', 'yes', 'on'], true);
 
+/**
+ * Toolforge issues one credential pair per tool, in replica.my.cnf, and it
+ * opens both the tool's own database on the tools cluster and the Wikimedia
+ * replicas. Reading it here means a Toolforge deployment needs no database
+ * credentials in .env at all — and no copy of a password in a second file.
+ */
+$replica = \JuryTool\Infrastructure\Commons\ReplicaCredentials::discover($env);
+
 return [
     'app' => [
         'name' => $env('APP_NAME', 'Snap'),
@@ -32,13 +40,26 @@ return [
         'root' => $root,
     ],
 
+    /**
+     * The tool's own database: campaigns, rounds, votes, users.
+     *
+     * On Toolforge this lives on the tools cluster and is reached with the
+     * credentials from replica.my.cnf, so DB_USER and DB_PASSWORD need not
+     * be set there. The database name follows Toolforge's convention of
+     * "<credential user>__<suffix>", which is derivable too — so a working
+     * deployment needs only DB_HOST, and that only because the same file
+     * is used off Toolforge.
+     */
     'db' => [
         'driver' => $env('DB_DRIVER', 'pdo_mysql'),
-        'host' => $env('DB_HOST', '127.0.0.1'),
+        'host' => $env('DB_HOST', $replica->isComplete() ? 'tools.db.svc.wikimedia.cloud' : '127.0.0.1'),
         'port' => (int) ($env('DB_PORT', '3306') ?? 3306),
-        'dbname' => $env('DB_NAME', 'jurytool'),
-        'user' => $env('DB_USER', 'root'),
-        'password' => $env('DB_PASSWORD', ''),
+        'dbname' => $env(
+            'DB_NAME',
+            $replica->user !== null ? $replica->user . '__snap' : 'jurytool'
+        ),
+        'user' => $env('DB_USER', $replica->user ?? 'root'),
+        'password' => $env('DB_PASSWORD', $replica->password ?? ''),
         'charset' => 'utf8mb4',
         // Used when DB_DRIVER is pdo_sqlite; handy for tests.
         'path' => $env('DB_PATH', $root . '/var/data.sqlite'),
@@ -104,8 +125,8 @@ return [
      * separate flag has to be remembered at deploy time; REPLICA_ENABLED=0
      * forces the API path back on for comparison.
      */
-    'replica' => (static function () use ($env, $bool): array {
-        $credentials = \JuryTool\Infrastructure\Commons\ReplicaCredentials::discover($env);
+    'replica' => (static function () use ($env, $bool, $replica): array {
+        $credentials = $replica;
 
         return [
             'enabled' => $bool($env('REPLICA_ENABLED'), true) && $credentials->isComplete(),

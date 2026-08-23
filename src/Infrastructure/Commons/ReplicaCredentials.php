@@ -61,13 +61,19 @@ final class ReplicaCredentials
         return new self();
     }
 
+    /** The tool's directory on Toolforge, where its replica.my.cnf lives. */
+    public const TOOL_DIR = '/data/project/snap';
+
     /**
      * The places a replica.my.cnf may live, most authoritative first.
      *
-     * `$HOME` is where Toolforge puts it and is correct in a normal shell,
-     * but a web service can run with a different or empty HOME — so the
-     * canonical /data/project path is checked as well, derived from the
-     * tool name the way Toolforge itself names the directory.
+     * The account's own home directory comes first, resolved through
+     * posix_getpwuid() as Wikitech's documented snippet does: it reads the
+     * passwd entry of the user the process actually runs as, so it holds
+     * where $HOME is unset or points somewhere else — which is exactly the
+     * case for a web service. $HOME is kept as a fallback for environments
+     * without ext-posix, and the tool directory is named outright so
+     * discovery works even if both are wrong.
      *
      * @param callable(string, ?string=): ?string $env
      * @return list<string>
@@ -80,13 +86,34 @@ final class ReplicaCredentials
             return [$explicit];
         }
 
-        $home = $env('HOME');
-        $tool = $env('TOOL_NAME') ?? ($home !== null ? basename($home) : null);
+        $tool = $env('TOOL_NAME');
 
-        return array_values(array_filter([
-            $home !== null ? $home . '/replica.my.cnf' : null,
-            $tool !== null ? '/data/project/' . $tool . '/replica.my.cnf' : null,
-        ]));
+        $dirs = array_filter([
+            self::passwdHome(),
+            $env('HOME'),
+            self::TOOL_DIR,
+            $tool !== null ? '/data/project/' . $tool : null,
+        ], static fn (?string $dir): bool => $dir !== null && $dir !== '');
+
+        return array_values(array_unique(array_map(
+            static fn (string $dir): string => rtrim($dir, '/') . '/replica.my.cnf',
+            $dirs,
+        )));
+    }
+
+    /**
+     * The home directory of the user this process runs as, from the passwd
+     * database rather than the environment.
+     */
+    private static function passwdHome(): ?string
+    {
+        if (!function_exists('posix_getuid') || !function_exists('posix_getpwuid')) {
+            return null;
+        }
+
+        $entry = posix_getpwuid(posix_getuid());
+
+        return is_array($entry) && !empty($entry['dir']) ? (string) $entry['dir'] : null;
     }
 
     /**

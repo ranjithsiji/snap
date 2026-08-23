@@ -12,7 +12,7 @@ compiled into `public/` and served by the same PHP process.
 - PHP 8.2 or newer, with `curl`, `json`, `pdo_mysql` and `mbstring`
 - MariaDB 10.6+ (or MySQL 8)
 - Composer 2
-- Node 18+ and npm, to build the frontend
+- Node 18+ and [pnpm](https://pnpm.io/), to build the frontend
 
 ## Installation
 
@@ -33,7 +33,7 @@ cp .env.example .env
 php bin/console schema:create
 
 # Build the frontend into public/
-cd frontend && npm install && npm run build && cd ..
+cd frontend && pnpm install && pnpm run build && cd ..
 
 # Create the first administrator
 php bin/console user:create YourName 'a-strong-password' administrator
@@ -49,13 +49,65 @@ Then open <http://localhost:8080> and sign in.
 
 ### Frontend development
 
-`npm run build` recompiles into `public/`. For hot reloading, run the PHP
-server and `npm run dev` side by side — Vite proxies `/api` to port 8080:
+`pnpm run build` recompiles into `public/`. For hot reloading, run the PHP
+server and `pnpm run dev` side by side — Vite proxies `/api` to port 8080:
 
 ```bash
 composer serve                  # terminal 1
-cd frontend && npm run dev      # terminal 2, then use Vite's URL
+cd frontend && pnpm run dev     # terminal 2, then use Vite's URL
 ```
+
+## Deploying to Toolforge
+
+Snap runs at <https://snap.toolforge.org/> with this layout:
+
+```
+/data/project/snap/replica.my.cnf   credentials, outside the repo
+/data/project/snap/snap/            this repository
+/data/project/snap/snap/public/     built SPA + index.php
+/data/project/snap/public_html   -> snap/public   (the docroot)
+/data/project/snap/.lighttpd.conf -> snap/.lighttpd.conf
+```
+
+```bash
+become snap
+git clone https://github.com/ranjithsiji/snap.git ~/snap
+cd ~/snap && ./bin/toolforge-deploy.sh
+```
+
+The script installs dependencies, builds the frontend, migrates, links
+the docroot and the lighttpd config, and restarts the web service. It is
+safe to re-run for each subsequent deploy.
+
+**Database credentials are not configured.** Toolforge issues one
+credential pair in `~/replica.my.cnf`, and it opens both the tool's own
+database on the tools cluster and the Commons replicas. Snap reads that
+file directly, so `DB_USER`, `DB_PASSWORD`, `REPLICA_USER` and
+`REPLICA_PASSWORD` are all left unset. The database name defaults to
+`<credential user>__snap`, but must be created once:
+
+```bash
+sql tools --execute "CREATE DATABASE ${USER}__snap;"
+```
+
+Only these need to be in `.env` on Toolforge:
+
+```ini
+APP_ENV=prod
+APP_URL=https://snap.toolforge.org
+JWT_SECRET=            # php -r "echo bin2hex(random_bytes(32));"
+OAUTH_CLIENT_ID=
+OAUTH_CLIENT_SECRET=
+OAUTH_REDIRECT_URI=https://snap.toolforge.org/wikicallback
+```
+
+Because it runs on Toolforge, category imports read the Wikimedia replica
+directly — one SQL query instead of paging the web API, seconds rather
+than minutes. `GET /api/commons/status` reports which source is live; if
+credentials are missing it falls back to the API silently, and that
+endpoint is how you find out.
+
+Errors are logged to `~/error.log`.
 
 ## Wikimedia OAuth
 

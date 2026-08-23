@@ -145,6 +145,47 @@ class ReplicaCredentialsTest extends TestCase
         $this->assertSame($home . '/replica.my.cnf', $found->source);
     }
 
+    /**
+     * REPLICA_CNF names a file, not a directory, and must be the only
+     * place consulted — it is how a developer points at a copy that is
+     * deliberately not in any of the usual locations.
+     */
+    #[Test]
+    public function an_explicit_path_wins_and_is_used_alone(): void
+    {
+        $dir = $this->tempHome("[client]\nuser = sExplicit\npassword = p\n");
+        $cnf = $dir . '/replica.my.cnf';
+
+        $found = ReplicaCredentials::discover($this->env([
+            'REPLICA_CNF' => $cnf,
+            // Ignored entirely: the explicit path short-circuits the search.
+            'HOME' => '/nonexistent-' . uniqid(),
+            'TOOL_NAME' => 'someothertool',
+        ]));
+
+        $this->assertSame('sExplicit', $found->user);
+        $this->assertSame($cnf, $found->source);
+    }
+
+    /**
+     * A web service can run with HOME unset. The tool's own directory is
+     * named in the class for exactly that case, so discovery still knows
+     * where to look.
+     */
+    #[Test]
+    public function it_falls_back_to_the_tool_directory(): void
+    {
+        $this->assertSame('/data/project/snap', ReplicaCredentials::TOOL_DIR);
+
+        // Nothing is readable in this environment, so this asserts the
+        // search completes rather than that it finds anything.
+        $found = ReplicaCredentials::discover(
+            $this->env(['HOME' => '/nonexistent-' . uniqid()])
+        );
+
+        $this->assertFalse($found->isComplete());
+    }
+
     #[Test]
     public function it_reports_nothing_when_no_credentials_exist(): void
     {
