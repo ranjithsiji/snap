@@ -40,6 +40,45 @@ try {
 
             break;
 
+        case 'db:check':
+            // Says which database the tool has resolved and why, because
+            // "Connection refused" on 127.0.0.1 means the credentials file
+            // was not found and everything fell back to local defaults —
+            // a message that describes the symptom and not the cause.
+            $settings = $container->get('settings');
+            $db = $settings['db'];
+            $replica = $settings['replica'];
+
+            printf("Tool database\n");
+            printf("  host        %s\n", $db['host']);
+            printf("  dbname      %s\n", $db['dbname']);
+            printf("  user        %s\n", $db['user']);
+            printf("  password    %s\n", $db['password'] !== '' ? '(set)' : '(empty)');
+            printf("  disable_ssl %s\n", $db['disable_ssl'] ? 'yes' : 'no');
+
+            printf("\nCredentials\n");
+            printf("  source      %s\n", $replica['credentials_source'] ?? '(none found)');
+
+            if (($replica['credentials_source'] ?? null) === null) {
+                printf("\n  No replica.my.cnf was found, so the settings above are the\n");
+                printf("  local development defaults. On Toolforge the file lives in\n");
+                printf("  the tool's home directory:\n");
+                printf("    ls -l ~/replica.my.cnf\n");
+                printf("  Point at it explicitly with REPLICA_CNF if it is elsewhere.\n");
+            }
+
+            printf("\nConnecting... ");
+
+            try {
+                $em->getConnection()->executeQuery('SELECT 1');
+                printf("ok\n");
+            } catch (Throwable $e) {
+                printf("FAILED\n  %s\n", $e->getMessage());
+                exit(1);
+            }
+
+            break;
+
         case 'schema:update':
             $tool = new SchemaTool($em);
             $statements = $tool->getUpdateSchemaSql($metadata());

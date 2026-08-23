@@ -35,10 +35,23 @@ say() { printf '\n\033[1m==> %s\033[0m\n' "$1"; }
 
 say "Deploying from $REPO (tool home: $TOOL_HOME)"
 
-if [ ! -r "$TOOL_HOME/replica.my.cnf" ]; then
-    echo "WARNING: $TOOL_HOME/replica.my.cnf is missing or unreadable." >&2
-    echo "         Both databases are reached with those credentials, so" >&2
-    echo "         the tool will not start without it." >&2
+# Without these credentials nothing resolves: the tool's own database is
+# on tools.db.svc.wikimedia.cloud and the Commons replicas are on
+# commonswiki.analytics.db.svc.wikimedia.cloud, and the same user and
+# password open both. Absent, every setting falls back to a local
+# development default and the first query fails with "Connection refused"
+# on 127.0.0.1 — a symptom that says nothing about the cause. So this
+# stops here instead.
+if [ -d /data/project ] && [ ! -r "$TOOL_HOME/replica.my.cnf" ]; then
+    echo "ERROR: $TOOL_HOME/replica.my.cnf is missing or unreadable." >&2
+    echo "" >&2
+    echo "       Toolforge writes it when the tool account is created, and" >&2
+    echo "       the same credentials open both the tool's own database and" >&2
+    echo "       the Commons replicas. Check:" >&2
+    echo "         ls -l $TOOL_HOME/replica.my.cnf" >&2
+    echo "" >&2
+    echo "       If it lives elsewhere, point at it with REPLICA_CNF." >&2
+    exit 1
 fi
 
 say "Installing PHP dependencies"
@@ -89,6 +102,12 @@ else
     echo "  Using the committed build in public/ ($(find public/assets -name '*.js' 2>/dev/null | wc -l) chunks)."
 fi
 
+say "Checking the database connection"
+# Reports which host and database were resolved before anything tries to
+# use them, so a misresolved setting is named rather than surfacing as a
+# driver error partway through the schema update.
+php bin/console db:check
+
 say "Updating the database schema"
 # The schema is derived from the entity mappings rather than from a
 # migration history: doctrine-migrations is a dependency, but no
@@ -104,7 +123,12 @@ php bin/console schema:update
 # Everything past here writes into the tool's home directory and drives
 # the Toolforge webservice, so it is meaningless — and untidy — anywhere
 # else. Running the script locally still exercises every step above.
-if ! command -v toolforge >/dev/null 2>&1; then
+#
+# Detected by the tool directory rather than by the `toolforge` command:
+# that command is absent inside `webservice shell`, which is exactly where
+# a deploy is usually run, and testing for it there skipped every step
+# below while claiming not to be on Toolforge.
+if [ ! -d /data/project ]; then
     say "Not on Toolforge"
     echo "  Dependencies, frontend and schema are up to date."
     echo "  Skipping the docroot symlink, lighttpd config and restart,"
@@ -135,7 +159,19 @@ ln -sfn "$REPO/.lighttpd.conf" "$TOOL_HOME/.lighttpd.conf"
 say "Restarting the web service"
 # php8.4: the ORM uses native lazy objects on 8.4 and falls back to
 # generated proxies below it, so this picks the faster path.
-toolforge webservice php8.4 restart
+#
+# The command exists on the bastion but not inside `webservice shell`,
+# which is where this script is often run — so its absence is reported as
+# the one remaining step rather than treated as a failure.
+if command -v toolforge >/dev/null 2>&1; then
+    toolforge webservice php8.4 restart
+else
+    echo "  The 'toolforge' command is not available here — it exists on"
+    echo "  the bastion, not inside 'webservice shell'. Everything else is"
+    echo "  deployed; finish by running this from the bastion:"
+    echo ""
+    echo "    toolforge webservice php8.4 restart"
+fi
 
 say "Done"
 echo "  https://snap.toolforge.org/"
