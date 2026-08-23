@@ -1,0 +1,202 @@
+<?php
+
+declare(strict_types=1);
+
+namespace JuryTool\Support;
+
+use JuryTool\Domain\Entity\Campaign;
+use JuryTool\Domain\Entity\Round;
+use JuryTool\Domain\Entity\RoundImage;
+use JuryTool\Domain\Entity\User;
+
+/**
+ * Turns entities into the JSON shapes the SPA consumes.
+ *
+ * Kept in one place so a field is exposed identically wherever it appears,
+ * and so juror-facing payloads can be filtered by the round's display
+ * settings in a single, auditable spot.
+ */
+final class Presenter
+{
+    /** @return array<string, mixed> */
+    public static function user(User $user): array
+    {
+        return [
+            'id' => $user->getId(),
+            'username' => $user->getUsername(),
+            'role' => $user->getRole()->value,
+            'isWikimediaLinked' => $user->getCentralAuthId() !== null,
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    public static function campaign(Campaign $campaign, bool $withRounds = false): array
+    {
+        $data = [
+            'id' => $campaign->getId(),
+            'name' => $campaign->getName(),
+            'slug' => $campaign->getSlug(),
+            'description' => $campaign->getDescription(),
+            'year' => $campaign->getYear(),
+            'startsAt' => self::date($campaign->getStartsAt()),
+            'endsAt' => self::date($campaign->getEndsAt()),
+            'isClosed' => $campaign->isClosed(),
+            'isArchived' => $campaign->isArchived(),
+            'sourceType' => $campaign->getSourceType()->value,
+            'sourceCategory' => $campaign->getSourceCategory(),
+            'sourceUrl' => $campaign->getSourceUrl(),
+            'sourceSummary' => $campaign->sourceSummary(),
+            'importedAt' => self::date($campaign->getImportedAt()),
+            'imageCount' => $campaign->getImages()->count(),
+            'createdAt' => self::date($campaign->getCreatedAt()),
+        ];
+
+        if ($withRounds) {
+            $data['rounds'] = array_map(
+                static fn (Round $r): array => self::round($r),
+                $campaign->getRounds()->toArray(),
+            );
+        }
+
+        return $data;
+    }
+
+    /** @return array<string, mixed> */
+    public static function round(Round $round): array
+    {
+        $settings = $round->getFileSettings();
+
+        return [
+            'id' => $round->getId(),
+            'campaignId' => $round->getCampaign()->getId(),
+            'campaignName' => $round->getCampaign()->getName(),
+            'name' => $round->getName(),
+            'sequence' => $round->getSequence(),
+            'details' => $round->getDetails(),
+            'votingDeadline' => self::date($round->getVotingDeadline()),
+            'deadlinePassed' => $round->hasDeadlinePassed(),
+            'votingMethod' => $round->getVotingMethod()->value,
+            'votingMethodLabel' => $round->getVotingMethod()->label(),
+            'maxRating' => $round->getMaxRating(),
+            'quorum' => $round->getQuorum(),
+            'effectiveQuorum' => $round->effectiveQuorum(),
+            'showOwnStatistics' => $round->showsOwnStatistics(),
+            'state' => $round->getState()->value,
+            'acceptsVotes' => $round->acceptsVotes(),
+            'derivedFromRoundId' => $round->getDerivedFrom()?->getId(),
+            'derivedFromRoundName' => $round->getDerivedFrom()?->getName(),
+            'derivationCriteria' => $round->getDerivationCriteria(),
+            'sourceSummary' => $round->sourceSummary(),
+            'createdAt' => self::date($round->getCreatedAt()),
+            'jurorUsernames' => $round->jurorUsernames(),
+            'fileSettings' => [
+                'disqualifyJurors' => $settings->disqualifiesJurors(),
+                'disqualifyByResolution' => $settings->disqualifiesByResolution(),
+                'minResolutionPixels' => $settings->getMinResolutionPixels(),
+                'disqualifyByUploadDate' => $settings->disqualifiesByUploadDate(),
+                'uploadDateFrom' => self::date($settings->getUploadDateFrom()),
+                'uploadDateTo' => self::date($settings->getUploadDateTo()),
+                'disqualifyCoordinators' => $settings->disqualifiesCoordinators(),
+                'disqualifyMaintainers' => $settings->disqualifiesMaintainers(),
+                'disqualifyOrganizers' => $settings->disqualifiesOrganizers(),
+                'showFilename' => $settings->showsFilename(),
+                'showLink' => $settings->showsLink(),
+                'showResolution' => $settings->showsResolution(),
+            ],
+        ];
+    }
+
+    /**
+     * An image as a coordinator sees it — everything, including who
+     * uploaded it and why it may have been excluded.
+     *
+     * @return array<string, mixed>
+     */
+    public static function imageForAdmin(RoundImage $image): array
+    {
+        return [
+            'id' => $image->getId(),
+            'pageId' => $image->getCommonsPageId(),
+            'title' => $image->getTitle(),
+            'name' => $image->getDisplayName(),
+            'fileUrl' => $image->getFileUrl(),
+            'thumbUrl' => $image->getThumbUrl(),
+            'descriptionUrl' => $image->getDescriptionUrl(),
+            'width' => $image->getWidth(),
+            'height' => $image->getHeight(),
+            'uploader' => $image->getUploader(),
+            'uploadedAt' => self::date($image->getUploadedAt()),
+            'isDisqualified' => $image->isDisqualified(),
+            'disqualificationReason' => $image->getDisqualificationReason(),
+            'voteCount' => $image->getVotes()->count(),
+        ];
+    }
+
+    /**
+     * An image as a juror sees it while voting.
+     *
+     * Filename, file link and resolution are withheld unless the round
+     * enables them, and the uploader is never exposed — that is what keeps
+     * the judging blind.
+     *
+     * @return array<string, mixed>
+     */
+    public static function imageForJuror(RoundImage $image, bool $lowBandwidth = false): array
+    {
+        $settings = $image->getRound()->getFileSettings();
+        $thumb = $image->getThumbUrl();
+
+        $data = [
+            'id' => $image->getId(),
+            // Served straight from Wikimedia's CDN — this tool stores the
+            // URL only and never copies the file.
+            'thumbUrl' => $lowBandwidth
+                ? (self::resizeThumb($thumb, 640) ?? $image->getFileUrl())
+                : ($thumb ?? $image->getFileUrl()),
+            // A grid tile needs far less than the voting stage does.
+            'gridUrl' => self::resizeThumb($thumb, 480) ?? $thumb,
+            // The full-size original, for the "Show full-size" action. This
+            // is the same file the thumbnail derives from, so it reveals
+            // nothing the juror cannot already see.
+            'fileUrl' => $image->getFileUrl(),
+        ];
+
+        if ($settings->showsFilename()) {
+            $data['name'] = $image->getDisplayName();
+        }
+
+        if ($settings->showsLink()) {
+            $data['descriptionUrl'] = $image->getDescriptionUrl();
+        }
+
+        if ($settings->showsResolution()) {
+            $data['width'] = $image->getWidth();
+            $data['height'] = $image->getHeight();
+            $data['megapixels'] = round($image->getPixelCount() / 1_000_000, 1);
+        }
+
+        return $data;
+    }
+
+    /**
+     * Rewrites a Commons thumbnail URL to a different width.
+     *
+     * Images are never copied into this tool — only their URLs are stored,
+     * and browsers fetch them straight from Wikimedia's CDN. Commons serves
+     * any width from the same path, so a smaller thumbnail costs nothing to
+     * produce and lets a juror on a slow connection work comfortably.
+     */
+    public static function resizeThumb(?string $thumbUrl, int $width): ?string
+    {
+        if ($thumbUrl === null) {
+            return null;
+        }
+
+        return preg_replace('#/\d+px-#', "/{$width}px-", $thumbUrl, 1) ?? $thumbUrl;
+    }
+
+    private static function date(?\DateTimeInterface $date): ?string
+    {
+        return $date?->format(\DateTimeInterface::ATOM);
+    }
+}

@@ -1,0 +1,16 @@
+/vendor/
+/node_modules/
+/var/
+/.env
+
+# Vite builds the SPA straight into public/; only the PHP front controller
+# and static extras are tracked.
+/public/assets/
+/public/index.html
+
+/frontend/node_modules/
+/frontend/dist/
+
+.phpunit.result.cache
+.DS_Store
+*.log

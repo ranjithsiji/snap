@@ -1,0 +1,195 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Maintenance commands: schema management, user administration, and
+ * re-importing campaign sources.
+ *
+ * Usage: bin/console <command> [arguments]
+ */
+
+use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\Tools\SchemaTool;
+use JuryTool\Domain\Entity\Campaign;
+use JuryTool\Domain\Entity\User;
+use JuryTool\Domain\Enum\UserRole;
+use JuryTool\Service\ImportService;
+
+$app = require dirname(__DIR__) . '/config/bootstrap.php';
+$container = $app->getContainer();
+
+/** @var EntityManagerInterface $em */
+$em = $container->get(EntityManagerInterface::class);
+
+$command = $argv[1] ?? 'help';
+$args = array_slice($argv, 2);
+
+/** All mapped entity metadata, for the schema commands. */
+$metadata = static fn (): array => $em->getMetadataFactory()->getAllMetadata();
+
+try {
+    switch ($command) {
+        case 'schema:create':
+            (new SchemaTool($em))->createSchema($metadata());
+            echo "Schema created.\n";
+
+            break;
+
+        case 'schema:update':
+            (new SchemaTool($em))->updateSchema($metadata());
+            echo "Schema updated.\n";
+
+            break;
+
+        case 'schema:drop':
+            if (($args[0] ?? '') !== '--force') {
+                echo "Refusing to drop the schema without --force.\n";
+                exit(1);
+            }
+
+            (new SchemaTool($em))->dropSchema($metadata());
+            echo "Schema dropped.\n";
+
+            break;
+
+        case 'schema:sql':
+            // Prints the DDL without touching the database, so it can be
+            // reviewed or applied by hand.
+            foreach ((new SchemaTool($em))->getCreateSchemaSql($metadata()) as $sql) {
+                echo $sql . ";\n";
+            }
+
+            break;
+
+        case 'user:create':
+            $username = $args[0] ?? null;
+            $password = $args[1] ?? null;
+            $role = UserRole::tryFrom($args[2] ?? 'administrator') ?? UserRole::Administrator;
+
+            if ($username === null || $password === null) {
+                echo "Usage: bin/console user:create <username> <password> [administrator|organizer|juror]\n";
+                exit(1);
+            }
+
+            $canonical = User::canonicaliseUsername($username);
+
+            if ($em->getRepository(User::class)->findOneBy(['username' => $canonical]) !== null) {
+                echo "User '$canonical' already exists.\n";
+                exit(1);
+            }
+
+            $user = new User($canonical, $role);
+            $user->setPassword($password);
+
+            $em->persist($user);
+            $em->flush();
+
+            echo "Created {$role->value} '{$canonical}'.\n";
+
+            break;
+
+        case 'user:role':
+            $username = $args[0] ?? null;
+            $role = UserRole::tryFrom($args[1] ?? '');
+
+            if ($username === null || $role === null) {
+                echo "Usage: bin/console user:role <username> <administrator|organizer|juror>\n";
+                exit(1);
+            }
+
+            $user = $em->getRepository(User::class)->findOneBy([
+                'username' => User::canonicaliseUsername($username),
+            ]);
+
+            if ($user === null) {
+                echo "No such user.\n";
+                exit(1);
+            }
+
+            $user->setRole($role);
+            $em->flush();
+
+            echo "{$user->getUsername()} is now {$role->value}.\n";
+
+            break;
+
+        case 'user:list':
+            foreach ($em->getRepository(User::class)->findAll() as $user) {
+                printf(
+                    "%-30s %-12s %s\n",
+                    $user->getUsername(),
+                    $user->getRole()->value,
+                    $user->hasLocalPassword() ? 'local' : 'oauth',
+                );
+            }
+
+            break;
+
+        case 'campaign:import':
+            $id = $args[0] ?? null;
+
+            if ($id === null) {
+                echo "Usage: bin/console campaign:import <campaignId>\n";
+                exit(1);
+            }
+
+            $campaign = $em->getRepository(Campaign::class)->find((int) $id);
+
+            if ($campaign === null) {
+                echo "No such campaign.\n";
+                exit(1);
+            }
+
+            $result = $container->get(ImportService::class)->importCampaign($campaign);
+
+            printf(
+                "Imported %d file(s): %d added, %d updated.\n",
+                $result->processed,
+                $result->added,
+                $result->updated,
+            );
+
+            break;
+
+        case 'campaign:list':
+            foreach ($em->getRepository(Campaign::class)->findAll() as $campaign) {
+                printf(
+                    "%-4d %-40s %-20s %d image(s)\n",
+                    $campaign->getId(),
+                    $campaign->getName(),
+                    $campaign->getSourceType()->value,
+                    $campaign->getImages()->count(),
+                );
+            }
+
+            break;
+
+        default:
+            echo <<<TXT
+            Wiki Loves Jury Tool
+
+            Schema
+              schema:create              Create all tables
+              schema:update              Apply entity changes to the database
+              schema:drop --force        Drop all tables
+              schema:sql                 Print the CREATE statements
+
+            Users
+              user:create <name> <pass> [role]   Create a local account
+              user:role <name> <role>            Change a user's role
+              user:list                          List all users
+
+            Campaigns
+              campaign:list                      List campaigns
+              campaign:import <id>               Re-import a campaign source
+
+            TXT;
+
+            break;
+    }
+} catch (Throwable $e) {
+    fwrite(STDERR, 'Error: ' . $e->getMessage() . "\n");
+    exit(1);
+}

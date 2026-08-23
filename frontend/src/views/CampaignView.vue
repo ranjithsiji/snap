@@ -1,0 +1,173 @@
+<script setup>
+import { onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import {
+  CdxButton,
+  CdxChipInput,
+  CdxField,
+  CdxInfoChip,
+  CdxMessage,
+  CdxProgressBar,
+} from '@wikimedia/codex'
+import { api } from '@/api'
+import { formatDeadline, formatNumber } from '@/format'
+
+const props = defineProps({ id: { type: String, required: true } })
+const router = useRouter()
+
+const campaign = ref(null)
+const participants = ref({})
+const loading = ref(true)
+const busy = ref(false)
+const error = ref(null)
+const notice = ref(null)
+
+// Participant roles drive the round's "disqualify …" rules, so they are
+// listed per campaign rather than per round. Jurors are not listed here:
+// they are set per round, and the rules read them from the seats directly.
+const roles = [
+  { key: 'organizer', label: 'Organizers' },
+  { key: 'coordinator', label: 'Coordinators' },
+  { key: 'maintainer', label: 'Maintainers' },
+]
+
+const chips = ref({ organizer: [], coordinator: [], maintainer: [] })
+
+async function load() {
+  loading.value = true
+
+  try {
+    const data = await api.get(`/campaigns/${props.id}`)
+    campaign.value = data.campaign
+    participants.value = data.participants
+
+    for (const { key } of roles) {
+      chips.value[key] = (data.participants[key] ?? []).map((name) => ({ label: name, value: name }))
+    }
+  } catch (e) {
+    error.value = e.message
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(load)
+
+async function saveParticipants(role) {
+  error.value = null
+  notice.value = null
+  busy.value = true
+
+  try {
+    await api.put(`/campaigns/${props.id}/participants`, {
+      role,
+      usernames: chips.value[role].map((chip) => chip.value),
+    })
+    notice.value = 'Participants saved.'
+  } catch (e) {
+    error.value = e.message
+  } finally {
+    busy.value = false
+  }
+}
+
+async function reimport() {
+  error.value = null
+  notice.value = null
+  busy.value = true
+
+  try {
+    const data = await api.post(`/campaigns/${props.id}/reimport`)
+    campaign.value = data.campaign
+    notice.value = `Import finished: ${data.import.added} added, ${data.import.updated} updated.`
+  } catch (e) {
+    error.value = e.message
+  } finally {
+    busy.value = false
+  }
+}
+</script>
+
+<template>
+  <CdxProgressBar v-if="loading" aria-label="Loading campaign" />
+
+  <template v-else-if="campaign">
+    <div class="page-head">
+      <div>
+        <h1 class="page-title">{{ campaign.name }}</h1>
+        <p class="page-subtitle">
+          {{ campaign.sourceSummary || 'No source' }} ·
+          {{ formatNumber(campaign.imageCount) }} image(s) in pool
+        </p>
+      </div>
+      <div class="row">
+        <CdxButton :disabled="busy" @click="reimport">
+          {{ busy ? 'Importing…' : 'Re-import from source' }}
+        </CdxButton>
+        <CdxButton
+          action="progressive"
+          weight="primary"
+          @click="router.push({ name: 'round-new', params: { campaignId: campaign.id } })"
+        >
+          Add Round
+        </CdxButton>
+      </div>
+    </div>
+
+    <CdxMessage v-if="error" type="error">{{ error }}</CdxMessage>
+    <CdxMessage v-if="notice" type="success">{{ notice }}</CdxMessage>
+    <CdxMessage v-if="!campaign.importedAt" type="warning">
+      This campaign's images have not been imported yet. Re-import before creating a round.
+    </CdxMessage>
+
+    <div class="grid-2">
+      <div>
+        <h2 class="section-title">Rounds</h2>
+
+        <div v-if="campaign.rounds.length === 0" class="card empty">
+          <p>No rounds yet.</p>
+        </div>
+
+        <div v-else class="stack">
+          <div
+            v-for="round in campaign.rounds"
+            :key="round.id"
+            class="card"
+            style="cursor: pointer"
+            @click="router.push({ name: 'round', params: { id: round.id } })"
+          >
+            <div class="row wrap">
+              <div>
+                <strong>{{ round.name }}</strong>
+                <p class="muted" style="margin: 0.25rem 0 0; font-size: 0.875rem">
+                  {{ round.votingMethodLabel }} · {{ formatDeadline(round.votingDeadline) }}
+                </p>
+              </div>
+              <span class="spacer"></span>
+              <CdxInfoChip :status="round.state === 'active' ? 'success' : 'notice'">
+                {{ round.state }}
+              </CdxInfoChip>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h2 class="section-title">Campaign participants</h2>
+        <p class="muted" style="margin-top: 0; font-size: 0.875rem">
+          Uploads by these users can be disqualified automatically, per each round's file settings.
+        </p>
+
+        <div class="card">
+          <CdxField v-for="role in roles" :key="role.key">
+            <template #label>{{ role.label }}</template>
+            <CdxChipInput v-model:input-chips="chips[role.key]" />
+            <template #help-text>
+              <CdxButton :disabled="busy" @click="saveParticipants(role.key)">Save</CdxButton>
+            </template>
+          </CdxField>
+        </div>
+      </div>
+    </div>
+  </template>
+</template>

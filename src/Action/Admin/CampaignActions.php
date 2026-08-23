@@ -1,0 +1,304 @@
+<?php
+
+declare(strict_types=1);
+
+namespace JuryTool\Action\Admin;
+
+use Doctrine\ORM\EntityManagerInterface;
+use JuryTool\Domain\Entity\Campaign;
+use JuryTool\Domain\Entity\CampaignParticipant;
+use JuryTool\Domain\Enum\ParticipantRole;
+use JuryTool\Domain\Enum\SourceType;
+use JuryTool\Middleware\AuthenticationMiddleware;
+use JuryTool\Domain\Entity\User;
+use JuryTool\Service\ActivityLogger;
+use JuryTool\Service\ImportService;
+use JuryTool\Support\DomainException;
+use JuryTool\Support\Json;
+use JuryTool\Support\Presenter;
+use Psr\Http\Message\ResponseInterface as Response;
+use Psr\Http\Message\ServerRequestInterface as Request;
+
+/**
+ * Campaign CRUD, participant roles, and importing the master image pool.
+ */
+class CampaignActions
+{
+    public function __construct(
+        private readonly EntityManagerInterface $em,
+        private readonly ImportService $import,
+        private readonly ActivityLogger $log,
+    ) {
+    }
+
+    /** The signed-in user, for audit entries. */
+    private function actor(Request $request): ?User
+    {
+        $actor = $request->getAttribute(AuthenticationMiddleware::USER_ATTRIBUTE);
+
+        return $actor instanceof User ? $actor : null;
+    }
+
+    public function list(Request $request, Response $response): Response
+    {
+        $campaigns = $this->em->getRepository(Campaign::class)
+            ->findBy([], ['createdAt' => 'DESC']);
+
+        return Json::write($response, [
+            'campaigns' => array_map(
+                static fn (Campaign $c): array => Presenter::campaign($c),
+                $campaigns,
+            ),
+        ]);
+    }
+
+    public function show(Request $request, Response $response, array $args): Response
+    {
+        $campaign = $this->find($args['id']);
+
+        return Json::write($response, [
+            'campaign' => Presenter::campaign($campaign, withRounds: true),
+            'participants' => $this->participants($campaign),
+        ]);
+    }
+
+    /**
+     * Creates a campaign and, unless told otherwise, immediately imports
+     * its source into the master image pool.
+     */
+    public function create(Request $request, Response $response): Response
+    {
+        $body = Json::body($request);
+
+        $name = Json::requireString($body, 'name');
+        $slug = Json::optionalString($body, 'slug') ?? $this->slugify($name);
+
+        if ($this->em->getRepository(Campaign::class)->findOneBy(['slug' => $slug]) !== null) {
+            throw DomainException::badRequest("A campaign with the slug '$slug' already exists.");
+        }
+
+        $campaign = new Campaign($name, $slug);
+        $this->applySettings($campaign, $body);
+
+        if (!$campaign->hasUsableSource()) {
+            throw DomainException::badRequest(
+                'Provide a category, file list URL, or file list for this campaign.'
+            );
+        }
+
+        $this->em->persist($campaign);
+        $this->em->flush();
+
+        $result = null;
+
+        if (Json::bool($body, 'importNow', true)) {
+            $result = $this->import->importCampaign($campaign)->toArray();
+        }
+
+        $this->log->record(
+            $this->actor($request),
+            'campaign.create',
+            sprintf('Created campaign "%s"', $campaign->getName()),
+            'Campaign',
+            $campaign->getId(),
+            $result,
+            $request,
+        );
+
+        return Json::write($response, [
+            'campaign' => Presenter::campaign($campaign),
+            'import' => $result,
+        ], 201);
+    }
+
+    public function update(Request $request, Response $response, array $args): Response
+    {
+        $campaign = $this->find($args['id']);
+        $body = Json::body($request);
+
+        if (($name = Json::optionalString($body, 'name')) !== null) {
+            $campaign->setName($name);
+        }
+
+        $this->applySettings($campaign, $body);
+        $this->em->flush();
+
+        return Json::write($response, ['campaign' => Presenter::campaign($campaign)]);
+    }
+
+    /** Re-runs the import to pick up files added to the source since. */
+    public function reimport(Request $request, Response $response, array $args): Response
+    {
+        $campaign = $this->find($args['id']);
+        $result = $this->import->importCampaign($campaign);
+
+        $this->log->record(
+            $this->actor($request),
+            'campaign.import',
+            sprintf(
+                'Re-imported "%s": %d added, %d updated',
+                $campaign->getName(),
+                $result->added,
+                $result->updated,
+            ),
+            'Campaign',
+            $campaign->getId(),
+            $result->toArray(),
+            $request,
+        );
+
+        return Json::write($response, [
+            'campaign' => Presenter::campaign($campaign),
+            'import' => $result->toArray(),
+        ]);
+    }
+
+    /** Replaces the campaign's participant roster for a given role. */
+    public function setParticipants(Request $request, Response $response, array $args): Response
+    {
+        $campaign = $this->find($args['id']);
+        $body = Json::body($request);
+
+        $role = ParticipantRole::tryFrom((string) ($body['role'] ?? ''));
+
+        if ($role === null) {
+            throw DomainException::badRequest('A valid participant role is required.');
+        }
+
+        $usernames = $body['usernames'] ?? [];
+
+        if (!is_array($usernames)) {
+            throw DomainException::badRequest("Field 'usernames' must be a list.");
+        }
+
+        foreach ($campaign->getParticipants() as $existing) {
+            if ($existing->getRole() === $role) {
+                $campaign->removeParticipant($existing);
+                $this->em->remove($existing);
+            }
+        }
+
+        // Flush the removals before inserting, or the unique constraint on
+        // (campaign, username, role) trips on names present in both sets.
+        $this->em->flush();
+
+        foreach ($usernames as $username) {
+            if (!is_string($username) || trim($username) === '') {
+                continue;
+            }
+
+            $this->em->persist(new CampaignParticipant($campaign, $username, $role));
+        }
+
+        $this->em->flush();
+
+        return Json::write($response, ['participants' => $this->participants($campaign)]);
+    }
+
+    public function delete(Request $request, Response $response, array $args): Response
+    {
+        $campaign = $this->find($args['id']);
+
+        $name = $campaign->getName();
+        $id = $campaign->getId();
+
+        $this->em->remove($campaign);
+        $this->em->flush();
+
+        $this->log->record(
+            $this->actor($request),
+            'campaign.delete',
+            sprintf('Deleted campaign "%s"', $name),
+            'Campaign',
+            $id,
+            request: $request,
+        );
+
+        return Json::write($response, ['ok' => true]);
+    }
+
+    /** @param array<string, mixed> $body */
+    private function applySettings(Campaign $campaign, array $body): void
+    {
+        if (array_key_exists('description', $body)) {
+            $campaign->setDescription(Json::optionalString($body, 'description'));
+        }
+
+        if (array_key_exists('year', $body)) {
+            $campaign->setYear(Json::int($body, 'year') ?: null);
+        }
+
+        if (array_key_exists('startsAt', $body)) {
+            $campaign->setStartsAt(Json::date($body, 'startsAt'));
+        }
+
+        if (array_key_exists('endsAt', $body)) {
+            $campaign->setEndsAt(Json::date($body, 'endsAt'));
+        }
+
+        if (array_key_exists('isClosed', $body)) {
+            $campaign->setClosed(Json::bool($body, 'isClosed'));
+        }
+
+        if (array_key_exists('isArchived', $body)) {
+            $campaign->setArchived(Json::bool($body, 'isArchived'));
+        }
+
+        if (array_key_exists('sourceType', $body)) {
+            $type = SourceType::tryFrom((string) $body['sourceType']);
+
+            if ($type === null || $type === SourceType::PreviousRound) {
+                throw DomainException::badRequest('Invalid source type for a campaign.');
+            }
+
+            $campaign->setSourceType($type);
+        }
+
+        if (array_key_exists('sourceCategory', $body)) {
+            $campaign->setSourceCategory(Json::optionalString($body, 'sourceCategory'));
+        }
+
+        if (array_key_exists('sourceUrl', $body)) {
+            $campaign->setSourceUrl(Json::optionalString($body, 'sourceUrl'));
+        }
+
+        if (array_key_exists('sourceFileList', $body)) {
+            $campaign->setSourceFileList(Json::optionalString($body, 'sourceFileList'));
+        }
+    }
+
+    /** @return array<string, list<string>> */
+    private function participants(Campaign $campaign): array
+    {
+        $byRole = [];
+
+        foreach (ParticipantRole::cases() as $role) {
+            $byRole[$role->value] = [];
+        }
+
+        foreach ($campaign->getParticipants() as $participant) {
+            $byRole[$participant->getRole()->value][] = $participant->getUsername();
+        }
+
+        return $byRole;
+    }
+
+    private function find(string|int $id): Campaign
+    {
+        $campaign = $this->em->getRepository(Campaign::class)->find((int) $id);
+
+        if ($campaign === null) {
+            throw DomainException::notFound('Campaign');
+        }
+
+        return $campaign;
+    }
+
+    private function slugify(string $name): string
+    {
+        $slug = strtolower(trim($name));
+        $slug = preg_replace('/[^a-z0-9]+/', '-', $slug) ?? $slug;
+
+        return trim($slug, '-') ?: 'campaign';
+    }
+}
