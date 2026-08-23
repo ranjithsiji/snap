@@ -16,6 +16,11 @@ replica.my.cnf
 /frontend/node_modules/
 /frontend/dist/
 
+# The frontend uses pnpm. A stray package-lock.json makes pnpm move the
+# packages npm installed into node_modules/.ignored and reinstall them,
+# so keep the npm lockfile from coming back.
+/frontend/package-lock.json
+
 .phpunit.result.cache
 .DS_Store
 *.log

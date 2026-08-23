@@ -1,0 +1,10 @@
+# pnpm 10+ refuses to run a dependency's install scripts unless it is
+# listed here, and fails the whole command while any remain undecided —
+# which is why `pnpm run build` exits 1 before vite is ever reached.
+#
+# Both of these are needed to build:
+#   esbuild   installs the platform binary vite compiles with
+#   vue-demi  points its compatibility shim at the installed Vue major
+allowBuilds:
+  esbuild: true
+  vue-demi: true
