@@ -8,6 +8,16 @@
       name="description"
       content="Snap runs the judging for Wiki Loves photography campaigns on Wikimedia Commons: importing entries, sharing them fairly among jurors, and finalising the result."
     />
+
+    <!-- The SVG is the real icon; every browser Snap targets supports one,
+         and it stays sharp at any size. The .ico is the fallback for the
+         few that ask for /favicon.ico regardless of what is declared. -->
+    <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+    <link rel="alternate icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+    <!-- Tints browser UI on mobile; taken from the logo's background. -->
+    <meta name="theme-color" content="#c5cdf2" />
   </head>
   <body>
     <div id="app"></div>

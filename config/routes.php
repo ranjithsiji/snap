@@ -130,14 +130,47 @@ return function (App $app): void {
 
     // Anything that is not the API belongs to the SPA, which owns its own
     // client-side routing: serve the built index.html and let Vue Router
-    // resolve the path. Static assets are served by the web server in
-    // production and by PHP's built-in server during development.
-    $app->get('/{path:.*}', function (Request $request, Response $response): Response {
-        $index = dirname(__DIR__) . '/public/index.html';
+    // resolve the path.
+    $app->get('/{path:.*}', function (Request $request, Response $response, array $args): Response {
+        $public = dirname(__DIR__) . '/public';
+        $path = (string) ($args['path'] ?? '');
+
+        // Files sitting at the root of the docroot — favicon.ico,
+        // logo.svg, robots.txt — reach this route rather than the web
+        // server's static handler, and returning index.html for them hands
+        // a browser HTML where it asked for an image. Serve the real file.
+        //
+        // Only a plain filename is considered: anything with a slash could
+        // climb out of public/, and every such asset lives at the top.
+        if ($path !== '' && !str_contains($path, '/')) {
+            $file = $public . '/' . $path;
+
+            if (is_file($file)) {
+                $types = [
+                    'ico' => 'image/x-icon',
+                    'svg' => 'image/svg+xml',
+                    'png' => 'image/png',
+                    'jpg' => 'image/jpeg',
+                    'webmanifest' => 'application/manifest+json',
+                    'txt' => 'text/plain; charset=utf-8',
+                    'xml' => 'application/xml',
+                ];
+
+                $extension = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+
+                if (isset($types[$extension])) {
+                    $response->getBody()->write((string) file_get_contents($file));
+
+                    return $response->withHeader('Content-Type', $types[$extension]);
+                }
+            }
+        }
+
+        $index = $public . '/index.html';
 
         if (!is_file($index)) {
             $response->getBody()->write(
-                'Frontend is not built yet. Run "npm install && npm run build" in frontend/.'
+                'Frontend is not built yet. Run "pnpm install && pnpm run build" in frontend/.'
             );
 
             return $response->withStatus(503)->withHeader('Content-Type', 'text/plain');
