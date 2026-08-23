@@ -168,9 +168,18 @@ return function (App $app): void {
                 $extension = strtolower(pathinfo($file, PATHINFO_EXTENSION));
 
                 if (isset($types[$extension])) {
-                    $response->getBody()->write((string) file_get_contents($file));
+                    $contents = (string) file_get_contents($file);
 
-                    return $response->withHeader('Content-Type', $types[$extension]);
+                    $response->getBody()->write($contents);
+
+                    // Content-Length matters in front of lighttpd: without
+                    // it mod_compress has no size to work from and the
+                    // browser receives a truncated body — a stylesheet that
+                    // arrives empty rather than failing outright, so the
+                    // page renders unstyled with a 200 in the network log.
+                    return $response
+                        ->withHeader('Content-Type', $types[$extension])
+                        ->withHeader('Content-Length', (string) strlen($contents));
                 }
             }
         }
