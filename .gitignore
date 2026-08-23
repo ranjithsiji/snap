@@ -3,6 +3,11 @@
 /var/
 /.env
 
+# Wikimedia replica credentials. On Toolforge these live outside the repo,
+# but they are easily copied in during local work — and they are live
+# database credentials, so never let them be committed.
+replica.my.cnf
+
 # Vite builds the SPA straight into public/; only the PHP front controller
 # and static extras are tracked.
 /public/assets/

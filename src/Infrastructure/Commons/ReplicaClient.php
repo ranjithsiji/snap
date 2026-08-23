@@ -8,7 +8,6 @@ use DateTimeImmutable;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\DriverManager;
 use Psr\Log\LoggerInterface;
-use RuntimeException;
 
 /**
  * Reads Commons metadata straight from the Wikimedia replica database.
@@ -32,9 +31,38 @@ class ReplicaClient
     ) {
     }
 
+    /**
+     * Whether credentials were found, regardless of whether the host can
+     * actually be reached. Distinguishes "not on Toolforge" from "on
+     * Toolforge but the replica is refusing connections".
+     */
+    public function isConfigured(): bool
+    {
+        return !empty($this->settings['user']) && !empty($this->settings['password']);
+    }
+
+    /** Where the credentials came from, for diagnostics. Never their value. */
+    public function credentialsSource(): ?string
+    {
+        $source = $this->settings['credentials_source'] ?? null;
+
+        return $source === null ? null : (string) $source;
+    }
+
+    public function host(): ?string
+    {
+        return isset($this->settings['host']) ? (string) $this->settings['host'] : null;
+    }
+
     /** Whether a replica connection is configured for this deployment. */
     public function isAvailable(): bool
     {
+        // `enabled` already accounts for whether credentials were found; it
+        // is also how REPLICA_ENABLED=0 forces the API path back on.
+        if (empty($this->settings['enabled'])) {
+            return false;
+        }
+
         if (empty($this->settings['host']) || empty($this->settings['user'])) {
             return false;
         }

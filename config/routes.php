@@ -23,6 +23,12 @@ return function (App $app): void {
     // campaign it is acting on.
     $access = $app->getContainer()->get(AccessControl::class);
 
+    // The OAuth callback is also reachable at the top level, because the
+    // URL registered with Wikimedia must match byte for byte and a shorter
+    // one is easier to get right. It is declared before the SPA catch-all
+    // so Vue Router can never shadow it.
+    $app->get('/wikicallback', [AuthActions::class, 'oauthCallback']);
+
     $app->group('/api', function (RouteCollectorProxy $api) use ($access): void {
         // --- Authentication -------------------------------------------
         $api->get('/auth/me', [AuthActions::class, 'me']);
@@ -78,6 +84,8 @@ return function (App $app): void {
             $org->post('/campaigns/{id}/organizers', [CampaignActions::class, 'appointOrganizer']);
             $org->delete('/campaigns/{id}/organizers/{userId}', [CampaignActions::class, 'removeOrganizer']);
             $org->get('/commons/users', [CommonsActions::class, 'searchUsers']);
+            // Whether imports are running off the replica or the API.
+            $org->get('/commons/status', [CommonsActions::class, 'status']);
 
             $org->get('/campaigns', [CampaignActions::class, 'list']);
             $org->post('/campaigns', [CampaignActions::class, 'create']);
