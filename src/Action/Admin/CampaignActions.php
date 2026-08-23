@@ -11,6 +11,10 @@ use JuryTool\Domain\Enum\ParticipantRole;
 use JuryTool\Domain\Enum\SourceType;
 use JuryTool\Middleware\AuthenticationMiddleware;
 use JuryTool\Domain\Entity\User;
+use JuryTool\Domain\Entity\Project;
+use JuryTool\Domain\Entity\RoleAssignment;
+use JuryTool\Domain\Enum\UserRole;
+use JuryTool\Service\AccessControl;
 use JuryTool\Service\ActivityLogger;
 use JuryTool\Service\ImportService;
 use JuryTool\Support\DomainException;
@@ -28,7 +32,116 @@ class CampaignActions
         private readonly EntityManagerInterface $em,
         private readonly ImportService $import,
         private readonly ActivityLogger $log,
+        private readonly AccessControl $access,
     ) {
+    }
+
+    /**
+     * Appoints an organizer to help run this campaign.
+     *
+     * The project's lead decides who helps them; the appointment is scoped
+     * to this campaign alone.
+     */
+    public function appointOrganizer(Request $request, Response $response, array $args): Response
+    {
+        $actor = $this->actor($request);
+        $campaign = $this->find($args['id']);
+
+        if ($actor === null) {
+            throw DomainException::unauthorized();
+        }
+
+        $this->access->requireLead($actor, $campaign->getProject());
+
+        $username = User::canonicaliseUsername(
+            Json::requireString(Json::body($request), 'username')
+        );
+
+        $user = $this->em->getRepository(User::class)->findOneBy(['username' => $username]);
+
+        if ($user === null) {
+            // Appointing someone before their first login is normal; the
+            // account binds to their Wikimedia identity when they arrive.
+            $user = new User($username, UserRole::Jury);
+            $this->em->persist($user);
+            $this->em->flush();
+        }
+
+        $this->access->appointOrganizer($user, $campaign, $actor);
+
+        if ($user->getRole()->level() < UserRole::Organizer->level()) {
+            $user->setRole(UserRole::Organizer);
+            $this->em->flush();
+        }
+
+        $this->log->record(
+            $actor,
+            'campaign.appoint_organizer',
+            sprintf('Appointed %s to organize "%s"', $username, $campaign->getName()),
+            'Campaign',
+            $campaign->getId(),
+            request: $request,
+        );
+
+        return Json::write($response, ['organizers' => $this->organizers($campaign)]);
+    }
+
+    /** Removes an organizer. Their account and other seats are untouched. */
+    public function removeOrganizer(Request $request, Response $response, array $args): Response
+    {
+        $actor = $this->actor($request);
+        $campaign = $this->find($args['id']);
+
+        if ($actor === null) {
+            throw DomainException::unauthorized();
+        }
+
+        $this->access->requireLead($actor, $campaign->getProject());
+
+        $assignment = $this->em->getRepository(RoleAssignment::class)->findOneBy([
+            'campaign' => $campaign,
+            'role' => UserRole::Organizer,
+            'user' => (int) $args['userId'],
+        ]);
+
+        if ($assignment === null) {
+            throw DomainException::notFound('Organizer');
+        }
+
+        $former = $assignment->getUser();
+        $username = $former->getUsername();
+
+        $this->access->revoke($assignment);
+        $this->access->syncBaselineRole($former);
+
+        $this->log->record(
+            $actor,
+            'campaign.remove_organizer',
+            sprintf('Removed %s as organizer of "%s"', $username, $campaign->getName()),
+            'Campaign',
+            $campaign->getId(),
+            request: $request,
+        );
+
+        return Json::write($response, ['organizers' => $this->organizers($campaign)]);
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function organizers(Campaign $campaign): array
+    {
+        $assignments = $this->em->getRepository(RoleAssignment::class)->findBy([
+            'campaign' => $campaign,
+            'role' => UserRole::Organizer,
+        ]);
+
+        return array_map(
+            static fn (RoleAssignment $a): array => [
+                'userId' => $a->getUser()->getId(),
+                'username' => $a->getUser()->getUsername(),
+                'appointedBy' => $a->getGrantedBy(),
+            ],
+            $assignments,
+        );
     }
 
     /** The signed-in user, for audit entries. */
@@ -59,6 +172,7 @@ class CampaignActions
         return Json::write($response, [
             'campaign' => Presenter::campaign($campaign, withRounds: true),
             'participants' => $this->participants($campaign),
+            'organizers' => $this->organizers($campaign),
         ]);
     }
 
@@ -68,7 +182,21 @@ class CampaignActions
      */
     public function create(Request $request, Response $response): Response
     {
+        $actor = $this->actor($request);
         $body = Json::body($request);
+
+        $project = $this->em->getRepository(Project::class)->find(Json::int($body, 'projectId'));
+
+        if ($project === null) {
+            throw DomainException::badRequest('A valid projectId is required.');
+        }
+
+        if ($actor === null) {
+            throw DomainException::unauthorized();
+        }
+
+        // Campaigns are editions of a project, so its lead creates them.
+        $this->access->requireLead($actor, $project);
 
         $name = Json::requireString($body, 'name');
         $slug = Json::optionalString($body, 'slug') ?? $this->slugify($name);
@@ -77,21 +205,18 @@ class CampaignActions
             throw DomainException::badRequest("A campaign with the slug '$slug' already exists.");
         }
 
-        $campaign = new Campaign($name, $slug);
+        $campaign = new Campaign($project, $name, $slug);
         $this->applySettings($campaign, $body);
 
-        if (!$campaign->hasUsableSource()) {
-            throw DomainException::badRequest(
-                'Provide a category, file list URL, or file list for this campaign.'
-            );
-        }
-
+        // A campaign no longer needs a source of its own: its rounds each
+        // gather their own Commons category — Trees, Rivers — so the
+        // campaign is a container for them rather than an image pool.
         $this->em->persist($campaign);
         $this->em->flush();
 
         $result = null;
 
-        if (Json::bool($body, 'importNow', true)) {
+        if (Json::bool($body, 'importNow', false) && $campaign->hasUsableSource()) {
             $result = $this->import->importCampaign($campaign)->toArray();
         }
 

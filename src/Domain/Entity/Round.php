@@ -53,6 +53,33 @@ class Round
     #[ORM\Column(name: 'max_rating', type: 'integer')]
     private int $maxRating = 5;
 
+    /**
+     * Where this round's images come from.
+     *
+     * Sources sit on the round rather than the campaign because a campaign
+     * such as "WLE 2026 in India" is usually judged as several parallel
+     * rounds — Trees, Rivers — each gathering its own Commons category.
+     * A round that derives from an earlier one leaves these null.
+     */
+    #[ORM\Column(name: 'source_type', type: 'string', length: 32, enumType: SourceType::class, nullable: true)]
+    private ?SourceType $sourceType = null;
+
+    /** Commons category, without the "Category:" prefix. */
+    #[ORM\Column(name: 'source_category', type: 'string', length: 512, nullable: true)]
+    private ?string $sourceCategory = null;
+
+    /** URL of a newline-separated file list, when sourceType is FileListUrl. */
+    #[ORM\Column(name: 'source_url', type: 'string', length: 1024, nullable: true)]
+    private ?string $sourceUrl = null;
+
+    /** Inline newline-separated file list, when sourceType is FileList. */
+    #[ORM\Column(name: 'source_file_list', type: 'text', nullable: true)]
+    private ?string $sourceFileList = null;
+
+    /** Set once this round's own source has been imported. */
+    #[ORM\Column(name: 'imported_at', type: 'datetime_immutable', nullable: true)]
+    private ?\DateTimeImmutable $importedAt = null;
+
     /** Set when this round's images were carried over from an earlier round. */
     #[ORM\ManyToOne(targetEntity: self::class)]
     #[ORM\JoinColumn(name: 'derived_from_round_id', nullable: true, onDelete: 'SET NULL')]
@@ -199,9 +226,86 @@ class Round
         return $this->votingMethod->defaultRange();
     }
 
+    public function getSourceType(): ?SourceType
+    {
+        return $this->sourceType;
+    }
+
+    public function setSourceType(?SourceType $type): void
+    {
+        $this->sourceType = $type;
+    }
+
+    public function getSourceCategory(): ?string
+    {
+        return $this->sourceCategory;
+    }
+
+    public function setSourceCategory(?string $category): void
+    {
+        $this->sourceCategory = $category !== null && trim($category) !== ''
+            ? preg_replace('/^Category:/i', '', trim(str_replace('_', ' ', $category)))
+            : null;
+    }
+
+    public function getSourceUrl(): ?string
+    {
+        return $this->sourceUrl;
+    }
+
+    public function setSourceUrl(?string $url): void
+    {
+        $this->sourceUrl = $url !== null && trim($url) !== '' ? trim($url) : null;
+    }
+
+    public function getSourceFileList(): ?string
+    {
+        return $this->sourceFileList;
+    }
+
+    public function setSourceFileList(?string $list): void
+    {
+        $this->sourceFileList = $list !== null && trim($list) !== '' ? $list : null;
+    }
+
+    /** @return list<string> */
+    public function parsedFileList(): array
+    {
+        return Campaign::parseTitles($this->sourceFileList ?? '');
+    }
+
+    public function getImportedAt(): ?\DateTimeImmutable
+    {
+        return $this->importedAt;
+    }
+
+    public function markImported(): void
+    {
+        $this->importedAt = new \DateTimeImmutable();
+    }
+
+    public function hasBeenImported(): bool
+    {
+        return $this->importedAt !== null;
+    }
+
     /**
-     * Where this round's images come from: an earlier round if derived,
-     * otherwise the campaign's configured source.
+     * Whether this round gathers its own images from Commons, as opposed to
+     * inheriting them from an earlier round or the campaign pool.
+     */
+    public function hasOwnSource(): bool
+    {
+        return match ($this->sourceType) {
+            SourceType::Category => $this->sourceCategory !== null,
+            SourceType::FileListUrl => $this->sourceUrl !== null,
+            SourceType::FileList => $this->parsedFileList() !== [],
+            default => false,
+        };
+    }
+
+    /**
+     * Where this round's images come from: its own source if it has one, an
+     * earlier round if derived, otherwise the campaign's pool.
      */
     public function sourceSummary(): ?string
     {
@@ -209,7 +313,12 @@ class Round
             return $this->derivedFrom->getName();
         }
 
-        return $this->campaign->sourceSummary();
+        return match ($this->sourceType) {
+            SourceType::Category => $this->sourceCategory,
+            SourceType::FileListUrl => $this->sourceUrl,
+            SourceType::FileList => sprintf('%d file(s)', count($this->parsedFileList())),
+            default => $this->campaign->sourceSummary(),
+        };
     }
 
     public function isDerived(): bool

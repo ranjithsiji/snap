@@ -12,9 +12,13 @@ use JuryTool\Domain\Entity\RoundJuror;
 use JuryTool\Domain\Entity\User;
 use JuryTool\Domain\Entity\Vote;
 use JuryTool\Domain\Enum\RoundState;
+use JuryTool\Domain\Enum\SourceType;
 use JuryTool\Domain\Enum\VotingMethod;
 use JuryTool\Middleware\AuthenticationMiddleware;
 use JuryTool\Service\ActivityLogger;
+use JuryTool\Domain\Entity\RoundSource;
+use JuryTool\Service\AccessControl;
+use JuryTool\Service\ImportService;
 use JuryTool\Service\AssignmentService;
 use JuryTool\Service\MeetingService;
 use JuryTool\Service\RoundDerivationService;
@@ -40,7 +44,132 @@ class RoundActions
         private readonly AssignmentService $assignments,
         private readonly ActivityLogger $log,
         private readonly MeetingService $meetings,
+        private readonly AccessControl $access,
+        private readonly ImportService $import,
     ) {
+    }
+
+    /**
+     * Imports this round's own Commons source.
+     *
+     * Parallel rounds of a campaign — Trees, Rivers — each gather their own
+     * category, so importing belongs to the round rather than the campaign.
+     */
+    public function import(Request $request, Response $response, array $args): Response
+    {
+        $round = $this->find($args['id']);
+        $actor = $this->actor($request);
+
+        if ($actor !== null) {
+            $this->access->requireOrganizer($actor, $round->getCampaign());
+        }
+
+        $outcome = $this->import->importRoundSource($round, $actor);
+        $population = $this->population->populate($round, $outcome['images']);
+
+        $this->log->record(
+            $actor,
+            'round.import',
+            sprintf(
+                'Imported %d file(s) into "%s"',
+                $outcome['result']->processed,
+                $round->getName(),
+            ),
+            'Round',
+            $round->getId(),
+            $outcome['result']->toArray(),
+            $request,
+        );
+
+        return Json::write($response, [
+            'import' => $outcome['result']->toArray(),
+            'warnings' => $outcome['warnings'],
+            'population' => $population->toArray(),
+            'sources' => $this->sources($round),
+        ]);
+    }
+
+    /**
+     * Retries an import that failed or stopped partway.
+     *
+     * Large categories can take minutes and fail on a timeout; because the
+     * pool matches on Commons page id, a retry resumes rather than
+     * duplicating what was already fetched.
+     */
+    public function retryImport(Request $request, Response $response, array $args): Response
+    {
+        $round = $this->find($args['id']);
+        $actor = $this->actor($request);
+
+        if ($actor !== null) {
+            $this->access->requireOrganizer($actor, $round->getCampaign());
+        }
+
+        $source = $this->em->getRepository(RoundSource::class)->find((int) $args['sourceId']);
+
+        if ($source === null || $source->getRound()->getId() !== $round->getId()) {
+            throw DomainException::notFound('Import');
+        }
+
+        $outcome = $this->import->retryRoundSource($source);
+        $population = $this->population->populate($round, $outcome['images']);
+
+        $this->log->record(
+            $actor,
+            'round.import_retry',
+            sprintf(
+                'Retried import of "%s" (attempt %d)',
+                $round->getName(),
+                $source->getAttemptCount(),
+            ),
+            'Round',
+            $round->getId(),
+            request: $request,
+        );
+
+        return Json::write($response, [
+            'import' => $outcome['result']->toArray(),
+            'warnings' => $outcome['warnings'],
+            'population' => $population->toArray(),
+            'sources' => $this->sources($round),
+        ]);
+    }
+
+    /**
+     * Candidate score thresholds with the resulting image count, so a
+     * coordinator can pick a cutoff by the shortlist size it produces.
+     */
+    public function thresholds(Request $request, Response $response, array $args): Response
+    {
+        $round = $this->find($args['id']);
+
+        return Json::write($response, [
+            'thresholds' => $this->derivation->thresholdOptions($round),
+        ]);
+    }
+
+    /** The round's import history, including any that failed. */
+    private function sources(Round $round): array
+    {
+        $sources = $this->em->getRepository(RoundSource::class)
+            ->findBy(['round' => $round], ['importedAt' => 'DESC']);
+
+        return array_map(
+            static fn (RoundSource $s): array => [
+                'id' => $s->getId(),
+                'summary' => $s->summary(),
+                'filesSeen' => $s->getFilesSeen(),
+                'filesAdded' => $s->getFilesAdded(),
+                'isComplete' => $s->isComplete(),
+                'hasFailed' => $s->hasFailed(),
+                'errorMessage' => $s->getErrorMessage(),
+                'attemptCount' => $s->getAttemptCount(),
+                'warnings' => $s->getWarnings(),
+                'importedBy' => $s->getImportedBy(),
+                'importedAt' => $s->getImportedAt()->format(\DateTimeInterface::ATOM),
+            ],
+            $sources,
+        );
     }
 
     /**
@@ -114,6 +243,7 @@ class RoundActions
             'round' => Presenter::round($round),
             'statistics' => $this->statistics->roundSummary($round),
             'jurors' => $this->statistics->jurorProgress($round),
+            'sources' => $this->sources($round),
         ]);
     }
 
@@ -137,7 +267,7 @@ class RoundActions
         $this->em->persist($round);
         $this->em->flush();
 
-        $this->applyJurors($round, $body);
+        $this->applyJurors($round, $body, $this->actor($request));
 
         $population = null;
 
@@ -176,7 +306,7 @@ class RoundActions
         }
 
         $this->applySettings($round, $body);
-        $this->applyJurors($round, $body);
+        $this->applyJurors($round, $body, $this->actor($request));
 
         $this->em->flush();
 
@@ -246,6 +376,12 @@ class RoundActions
 
         if ($juror === null || $juror->getRound()->getId() !== $round->getId()) {
             throw DomainException::notFound('Juror');
+        }
+
+        $actor = $this->actor($request);
+
+        if ($actor !== null) {
+            $this->access->requireOrganizer($actor, $round->getCampaign());
         }
 
         $username = User::canonicaliseUsername(
@@ -407,7 +543,7 @@ class RoundActions
 
         return Json::write($response, [
             'count' => $this->derivation->previewCount($round, $criteria),
-            'criteria' => $criteria->describe($round->getVotingMethod()),
+            'criteria' => $criteria->describe($round->getVotingMethod(), $round->getMaxRating()),
         ]);
     }
 
@@ -442,6 +578,31 @@ class RoundActions
     /** @param array<string, mixed> $body */
     private function applySettings(Round $round, array $body): void
     {
+        // Each round gathers its own Commons category — a campaign such as
+        // "WLE 2026 in India" is judged as parallel rounds for Trees and
+        // Rivers, so the source belongs here rather than on the campaign.
+        if (array_key_exists('sourceType', $body)) {
+            $type = SourceType::tryFrom((string) $body['sourceType']);
+
+            if ($type === null || $type === SourceType::PreviousRound) {
+                throw DomainException::badRequest('Invalid source type for a round.');
+            }
+
+            $round->setSourceType($type);
+        }
+
+        if (array_key_exists('sourceCategory', $body)) {
+            $round->setSourceCategory(Json::optionalString($body, 'sourceCategory'));
+        }
+
+        if (array_key_exists('sourceUrl', $body)) {
+            $round->setSourceUrl(Json::optionalString($body, 'sourceUrl'));
+        }
+
+        if (array_key_exists('sourceFileList', $body)) {
+            $round->setSourceFileList(Json::optionalString($body, 'sourceFileList'));
+        }
+
         if (array_key_exists('details', $body)) {
             $round->setDetails(Json::optionalString($body, 'details'));
         }
@@ -518,10 +679,16 @@ class RoundActions
      *
      * @param array<string, mixed> $body
      */
-    private function applyJurors(Round $round, array $body): void
+    private function applyJurors(Round $round, array $body, ?User $actor = null): void
     {
         if (!isset($body['jurors']) || !is_array($body['jurors'])) {
             return;
+        }
+
+        // Organizers run the campaign's rounds and choose who judges them;
+        // the lead and admins can do the same, since both outrank them.
+        if ($actor !== null) {
+            $this->access->requireOrganizer($actor, $round->getCampaign());
         }
 
         // Yes/no and rating rounds deal specific images to specific jurors

@@ -69,6 +69,19 @@ class RoundDerivationService
                 ->setParameter('minAccepts', $criteria->minAcceptCount);
         }
 
+        // "Half the jury scored it 4 or above" travels between levels
+        // better than an absolute count, because the panel size changes.
+        if ($criteria->hasVoterFractionRule()) {
+            $threshold = $criteria->effectiveScoreThreshold($method, $source->getMaxRating());
+
+            $qb->andHaving(
+                'SUM(CASE WHEN v.score >= :scoreThreshold THEN 1 ELSE 0 END) >= '
+                . ':voterFraction * COUNT(v.id)'
+            )
+                ->setParameter('scoreThreshold', $threshold)
+                ->setParameter('voterFraction', $criteria->minVoterFraction);
+        }
+
         if ($criteria->minAverageScore !== null) {
             // In a ranking round a lower average position is better, so the
             // threshold is a ceiling rather than a floor.
@@ -102,6 +115,87 @@ class RoundDerivationService
     }
 
     /**
+     * Candidate thresholds with the number of images each would carry over.
+     *
+     * Choosing a cutoff in the abstract is guesswork — "average 5 of 10"
+     * means nothing until you know it keeps 458 photographs. Offering the
+     * count beside each option lets a coordinator pick by the size of the
+     * shortlist they want.
+     *
+     * @return list<array{threshold: float, label: string, count: int}>
+     */
+    public function thresholdOptions(Round $source): array
+    {
+        $method = $source->getVotingMethod();
+
+        // One pass over the round's aggregate scores; the options are then
+        // counted in PHP rather than with a query per candidate value.
+        $rows = $this->em->createQuery(
+            'SELECT AVG(v.score) AS averageScore
+             FROM ' . RoundImage::class . ' ri
+             LEFT JOIN ri.votes v
+             WHERE ri.round = :round AND ri.isDisqualified = false
+             GROUP BY ri.id'
+        )->setParameter('round', $source)->getResult();
+
+        $averages = [];
+        foreach ($rows as $row) {
+            if ($row['averageScore'] !== null) {
+                $averages[] = (float) $row['averageScore'];
+            }
+        }
+
+        if ($averages === []) {
+            return [];
+        }
+
+        [$min, $max] = $method === VotingMethod::Rating
+            ? [1.0, (float) $source->getMaxRating()]
+            : [0.0, 1.0];
+
+        // Rating rounds get one option per half-star; yes/no rounds are
+        // better served by acceptance proportions.
+        $steps = $method === VotingMethod::Rating
+            ? $this->rangeSteps($min, $max, 0.5)
+            : [0.0, 0.25, 0.5, 0.75, 1.0];
+
+        $options = [];
+
+        foreach ($steps as $threshold) {
+            $count = count(array_filter(
+                $averages,
+                static fn (float $average): bool => $average >= $threshold,
+            ));
+
+            $options[] = [
+                'threshold' => $threshold,
+                'label' => $method === VotingMethod::Rating
+                    ? sprintf('%.2f / %d', $threshold, $source->getMaxRating())
+                    : sprintf('%d%% accepted', (int) round($threshold * 100)),
+                'count' => $count,
+            ];
+        }
+
+        return $options;
+    }
+
+    /**
+     * Inclusive range of thresholds.
+     *
+     * @return list<float>
+     */
+    private function rangeSteps(float $min, float $max, float $step): array
+    {
+        $steps = [];
+
+        for ($value = $min; $value <= $max + 0.001; $value += $step) {
+            $steps[] = round($value, 2);
+        }
+
+        return $steps;
+    }
+
+    /**
      * Creates the next round and fills it with the qualifying images.
      *
      * The new round starts in Draft so the coordinator can adjust its
@@ -115,6 +209,13 @@ class RoundDerivationService
             );
         }
 
+        // The jury meeting settles the result, so nothing follows it.
+        if ($source->getVotingMethod() === VotingMethod::Meeting) {
+            throw new DomainException(
+                'A jury meeting is the final step — no further round can follow it.'
+            );
+        }
+
         $images = $this->selectImages($source, $criteria);
 
         if ($images === []) {
@@ -123,7 +224,7 @@ class RoundDerivationService
 
         $round = new Round($source->getCampaign(), $name);
         $round->setDerivedFrom($source);
-        $round->setDerivationCriteria($criteria->describe($source->getVotingMethod()));
+        $round->setDerivationCriteria($criteria->describe($source->getVotingMethod(), $source->getMaxRating()));
 
         // Carry the source round's configuration forward as a starting
         // point; the coordinator edits it before activating.
@@ -158,7 +259,7 @@ class RoundDerivationService
             'source' => $source->getId(),
             'round' => $round->getId(),
             'images' => count($images),
-            'criteria' => $criteria->describe($source->getVotingMethod()),
+            'criteria' => $criteria->describe($source->getVotingMethod(), $source->getMaxRating()),
         ]);
 
         return $round;

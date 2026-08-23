@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace JuryTool\Service;
 
 use Doctrine\ORM\EntityManagerInterface;
+use JuryTool\Domain\Entity\RoleAssignment;
 use JuryTool\Domain\Entity\RoundJuror;
 use JuryTool\Domain\Entity\User;
 use JuryTool\Domain\Enum\UserRole;
@@ -86,8 +87,15 @@ class AuthService
         $user ??= $repository->findOneBy(['username' => $canonical]);
 
         if ($user === null) {
-            $user = new User($canonical, $this->defaultRoleFor($canonical));
+            $role = $this->defaultRoleFor($canonical);
+            $user = new User($canonical, $role);
             $this->em->persist($user);
+
+            // Authority lives in RoleAssignment, so the bootstrap admin
+            // needs the grant as well as the baseline column.
+            if ($role === UserRole::Admin) {
+                $this->em->persist(RoleAssignment::admin($user));
+            }
         }
 
         if ($centralAuthId !== null && $user->getCentralAuthId() === null) {
@@ -108,7 +116,8 @@ class AuthService
 
     /**
      * The first account to exist becomes an admin, so a fresh deployment is
-     * usable without seeding one by hand. Everyone else starts as a juror.
+     * usable without seeding one by hand. Everyone else starts as jury —
+     * roles are granted per project or campaign afterwards.
      */
     private function defaultRoleFor(string $username): UserRole
     {
@@ -116,7 +125,7 @@ class AuthService
             'SELECT COUNT(u.id) FROM ' . User::class . ' u'
         )->getSingleScalarResult();
 
-        return $count === 0 ? UserRole::Administrator : UserRole::Juror;
+        return $count === 0 ? UserRole::Admin : UserRole::Jury;
     }
 
     /**

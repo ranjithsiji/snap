@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace JuryTool\Support;
 
 use JuryTool\Domain\Entity\Campaign;
+use JuryTool\Domain\Entity\Project;
 use JuryTool\Domain\Entity\Round;
 use JuryTool\Domain\Entity\RoundImage;
 use JuryTool\Domain\Entity\User;
@@ -30,10 +31,37 @@ final class Presenter
     }
 
     /** @return array<string, mixed> */
+    public static function project(Project $project, bool $withCampaigns = false): array
+    {
+        $data = [
+            'id' => $project->getId(),
+            'name' => $project->getName(),
+            'slug' => $project->getSlug(),
+            'description' => $project->getDescription(),
+            'homepageUrl' => $project->getHomepageUrl(),
+            'isArchived' => $project->isArchived(),
+            'leads' => $project->leadUsernames(),
+            'campaignCount' => $project->getCampaigns()->count(),
+            'createdAt' => self::date($project->getCreatedAt()),
+        ];
+
+        if ($withCampaigns) {
+            $data['campaigns'] = array_map(
+                static fn (Campaign $c): array => self::campaign($c),
+                $project->getCampaigns()->toArray(),
+            );
+        }
+
+        return $data;
+    }
+
+    /** @return array<string, mixed> */
     public static function campaign(Campaign $campaign, bool $withRounds = false): array
     {
         $data = [
             'id' => $campaign->getId(),
+            'projectId' => $campaign->getProject()->getId(),
+            'projectName' => $campaign->getProject()->getName(),
             'name' => $campaign->getName(),
             'slug' => $campaign->getSlug(),
             'description' => $campaign->getDescription(),
@@ -86,7 +114,15 @@ final class Presenter
             'derivedFromRoundId' => $round->getDerivedFrom()?->getId(),
             'derivedFromRoundName' => $round->getDerivedFrom()?->getName(),
             'derivationCriteria' => $round->getDerivationCriteria(),
+            'sourceType' => $round->getSourceType()?->value,
+            'sourceCategory' => $round->getSourceCategory(),
+            'sourceUrl' => $round->getSourceUrl(),
             'sourceSummary' => $round->sourceSummary(),
+            'hasOwnSource' => $round->hasOwnSource(),
+            'importedAt' => self::date($round->getImportedAt()),
+            // A round that continues another is shown as part of that
+            // sequence in the UI rather than as a standalone round.
+            'isContinuation' => $round->getDerivedFrom() !== null,
             'createdAt' => self::date($round->getCreatedAt()),
             'jurorUsernames' => $round->jurorUsernames(),
             'fileSettings' => [

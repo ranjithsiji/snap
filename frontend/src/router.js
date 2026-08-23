@@ -7,6 +7,17 @@ const routes = [
 
   // Organizer (read) and administrator (write)
   {
+    path: '/projects',
+    name: 'projects',
+    component: () => import('@/views/ProjectListView.vue'),
+  },
+  {
+    path: '/projects/:id',
+    name: 'project',
+    component: () => import('@/views/ProjectView.vue'),
+    props: true,
+  },
+  {
     path: '/campaigns',
     name: 'campaigns',
     component: () => import('@/views/CampaignListView.vue'),

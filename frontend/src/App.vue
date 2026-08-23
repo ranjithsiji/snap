@@ -27,6 +27,7 @@ async function logout() {
 
       <nav v-if="session.isAuthenticated" class="topnav">
         <RouterLink :to="{ name: 'home' }">My rounds</RouterLink>
+        <RouterLink :to="{ name: 'projects' }">Projects</RouterLink>
         <RouterLink v-if="session.isOrganizer" :to="{ name: 'campaigns' }">Campaigns</RouterLink>
         <RouterLink v-if="session.isAdministrator" :to="{ name: 'admin' }">Administration</RouterLink>
       </nav>

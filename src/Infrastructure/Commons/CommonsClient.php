@@ -20,6 +20,13 @@ class CommonsClient
 {
     private const MAX_TITLES_PER_QUERY = 50;
 
+    /**
+     * Titles the most recent filesByTitle() call could not resolve.
+     *
+     * @var list<string>
+     */
+    private array $missingTitles = [];
+
     /** @param array<string, mixed> $settings */
     public function __construct(
         private readonly array $settings,
@@ -73,6 +80,8 @@ class CommonsClient
      */
     public function filesByTitle(array $titles): Generator
     {
+        $this->missingTitles = [];
+
         $normalised = [];
         foreach ($titles as $title) {
             $title = trim($title);
@@ -94,8 +103,34 @@ class CommonsClient
                 'iiurlwidth' => (string) $this->settings['thumb_width'],
             ]);
 
+            // Titles the API could not resolve are collected rather than
+            // dropped: a misspelled or since-renamed filename means a real
+            // entry would go unjudged, and the coordinator needs to know.
+            foreach ($response['query']['pages'] ?? [] as $page) {
+                if (isset($page['missing']) || isset($page['invalid'])) {
+                    $this->missingTitles[] = (string) ($page['title'] ?? 'unknown');
+                }
+            }
+
             yield from $this->extractFiles($response);
         }
+    }
+
+    /**
+     * Human-readable warnings from the last filesByTitle() call.
+     *
+     * @return list<string>
+     */
+    public function lastWarnings(): array
+    {
+        return array_map(
+            static fn (string $title): string => sprintf(
+                'File "%s" does not exist. Check the spelling, and whether it has been renamed '
+                . 'or deleted since the list was written.',
+                preg_replace('/^File:/i', '', $title),
+            ),
+            $this->missingTitles,
+        );
     }
 
     /**

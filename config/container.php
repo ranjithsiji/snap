@@ -7,7 +7,9 @@ use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\ORMSetup;
 use JuryTool\Infrastructure\Commons\CommonsClient;
+use JuryTool\Infrastructure\Commons\ReplicaClient;
 use JuryTool\Infrastructure\Doctrine\RandFunction;
+use JuryTool\Service\AccessControl;
 use JuryTool\Service\ActivityLogger;
 use JuryTool\Service\AssignmentService;
 use JuryTool\Service\AuthService;
@@ -114,6 +116,11 @@ return [
         $c->get(LoggerInterface::class),
     ),
 
+    ReplicaClient::class => static fn (ContainerInterface $c) => new ReplicaClient(
+        $c->get('settings')['replica'],
+        $c->get(LoggerInterface::class),
+    ),
+
     TokenService::class => static fn (ContainerInterface $c) => new TokenService(
         $c->get('settings')['auth'],
     ),
@@ -132,6 +139,12 @@ return [
         $c->get(CommonsClient::class),
         $c->get(EntityManagerInterface::class),
         $c->get(LoggerInterface::class),
+        // Used in preference to the API when the tool runs on Toolforge.
+        $c->get('settings')['replica']['enabled'] ? $c->get(ReplicaClient::class) : null,
+    ),
+
+    AccessControl::class => static fn (ContainerInterface $c) => new AccessControl(
+        $c->get(EntityManagerInterface::class),
     ),
 
     ActivityLogger::class => static fn (ContainerInterface $c) => new ActivityLogger(

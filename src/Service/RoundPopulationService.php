@@ -174,7 +174,7 @@ class RoundPopulationService
             'SELECT u.username FROM ' . User::class . ' u WHERE u.role IN (:roles)'
         )->setParameter('roles', [
             UserRole::Organizer->value,
-            UserRole::Administrator->value,
+            UserRole::Admin->value,
         ])->getScalarResult();
 
         return array_map(static fn (array $row): string => (string) $row['username'], $rows);

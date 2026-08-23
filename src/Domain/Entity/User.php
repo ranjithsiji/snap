@@ -40,8 +40,16 @@ class User
     #[ORM\Column(name: 'password_hash', type: 'string', length: 255, nullable: true)]
     private ?string $passwordHash = null;
 
+    /**
+     * The user's baseline role.
+     *
+     * Real authority comes from scoped RoleAssignment rows — leading a
+     * project, organizing a campaign. This column records the highest
+     * level they have been trusted with anywhere, which is what listings
+     * and the navigation menu key off.
+     */
     #[ORM\Column(type: 'string', length: 32, enumType: UserRole::class)]
-    private UserRole $role = UserRole::Juror;
+    private UserRole $role = UserRole::Jury;
 
     #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $email = null;
@@ -55,7 +63,7 @@ class User
     #[ORM\Column(name: 'last_login_at', type: 'datetime_immutable', nullable: true)]
     private ?DateTimeImmutable $lastLoginAt = null;
 
-    public function __construct(string $username, UserRole $role = UserRole::Juror)
+    public function __construct(string $username, UserRole $role = UserRole::Jury)
     {
         $this->username = self::canonicaliseUsername($username);
         $this->role = $role;

@@ -90,6 +90,52 @@ return [
         'timeout' => (int) ($env('COMMONS_TIMEOUT', '30') ?? 30),
     ],
 
+    /**
+     * Wikimedia replica database (Toolforge only).
+     *
+     * When reachable, a category is read with one SQL query instead of
+     * paging through the web API — seconds rather than minutes. The tool
+     * falls back to the API automatically when this is not configured, so
+     * it runs unchanged off Toolforge.
+     *
+     * On Toolforge the credentials live in ~/replica.my.cnf; they are read
+     * from there unless REPLICA_USER is set explicitly.
+     */
+    'replica' => (static function () use ($env, $bool): array {
+        $enabled = $bool($env('REPLICA_ENABLED'), false);
+
+        $user = $env('REPLICA_USER');
+        $password = $env('REPLICA_PASSWORD');
+
+        // Toolforge writes the tool's database credentials to this file.
+        $cnf = $env('REPLICA_CNF', ($env('HOME') ?? '') . '/replica.my.cnf');
+
+        if ($user === null && $cnf !== null && is_readable($cnf)) {
+            $parsed = parse_ini_file($cnf, true, INI_SCANNER_RAW);
+            $client = $parsed['client'] ?? [];
+
+            $user = isset($client['user']) ? trim((string) $client['user'], "'\"") : null;
+            $password = isset($client['password']) ? trim((string) $client['password'], "'\"") : null;
+
+            // Finding the file is itself a reliable signal that the tool is
+            // running on Toolforge.
+            $enabled = $enabled || $user !== null;
+        }
+
+        return [
+            'enabled' => $enabled,
+            'host' => $env('REPLICA_HOST', 'commonswiki.analytics.db.svc.wikimedia.cloud'),
+            'port' => (int) ($env('REPLICA_PORT', '3306') ?? 3306),
+            'dbname' => $env('REPLICA_DB', 'commonswiki_p'),
+            'user' => $user,
+            'password' => $password,
+            'thumb_width' => (int) ($env('COMMONS_THUMB_WIDTH', '1024') ?? 1024),
+            // Rows per keyset page. The replica is fast, so this is far
+            // larger than the API's 500 ceiling.
+            'batch_size' => (int) ($env('REPLICA_BATCH_SIZE', '5000') ?? 5000),
+        ];
+    })(),
+
     'logger' => [
         'name' => 'jurytool',
         'path' => $env('LOG_PATH', $root . '/var/log/app.log'),

@@ -14,6 +14,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use JuryTool\Domain\Entity\Campaign;
 use JuryTool\Domain\Entity\User;
+use JuryTool\Domain\Entity\RoleAssignment;
 use JuryTool\Domain\Enum\UserRole;
 use JuryTool\Service\ImportService;
 
@@ -66,10 +67,10 @@ try {
         case 'user:create':
             $username = $args[0] ?? null;
             $password = $args[1] ?? null;
-            $role = UserRole::tryFrom($args[2] ?? 'administrator') ?? UserRole::Administrator;
+            $role = UserRole::tryFrom($args[2] ?? 'admin') ?? UserRole::Admin;
 
             if ($username === null || $password === null) {
-                echo "Usage: bin/console user:create <username> <password> [administrator|organizer|juror]\n";
+                echo "Usage: bin/console user:create <username> <password> [admin|lead|organizer|jury]\n";
                 exit(1);
             }
 
@@ -84,6 +85,14 @@ try {
             $user->setPassword($password);
 
             $em->persist($user);
+
+            // An admin's authority comes from a RoleAssignment, not the
+            // baseline column, so the grant is created alongside the
+            // account — otherwise the first admin could not do anything.
+            if ($role === UserRole::Admin) {
+                $em->persist(RoleAssignment::admin($user));
+            }
+
             $em->flush();
 
             echo "Created {$role->value} '{$canonical}'.\n";
@@ -95,7 +104,7 @@ try {
             $role = UserRole::tryFrom($args[1] ?? '');
 
             if ($username === null || $role === null) {
-                echo "Usage: bin/console user:role <username> <administrator|organizer|juror>\n";
+                echo "Usage: bin/console user:role <username> <admin|lead|organizer|jury>\n";
                 exit(1);
             }
 
@@ -109,6 +118,18 @@ try {
             }
 
             $user->setRole($role);
+
+            $existingAdmin = $em->getRepository(RoleAssignment::class)
+                ->findOneBy(['user' => $user, 'role' => UserRole::Admin]);
+
+            if ($role === UserRole::Admin && $existingAdmin === null) {
+                $em->persist(RoleAssignment::admin($user));
+            } elseif ($role !== UserRole::Admin && $existingAdmin !== null) {
+                // Standing down from admin removes the grant but never the
+                // account: other seats and the login remain.
+                $em->remove($existingAdmin);
+            }
+
             $em->flush();
 
             echo "{$user->getUsername()} is now {$role->value}.\n";

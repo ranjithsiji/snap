@@ -1,0 +1,279 @@
+<?php
+
+declare(strict_types=1);
+
+namespace JuryTool\Infrastructure\Commons;
+
+use DateTimeImmutable;
+use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\DriverManager;
+use Psr\Log\LoggerInterface;
+use RuntimeException;
+
+/**
+ * Reads Commons metadata straight from the Wikimedia replica database.
+ *
+ * Available on Toolforge, where `commonswiki.analytics.db.svc.wikimedia.cloud`
+ * exposes a read-only copy of the wiki. A category that takes minutes to
+ * page through the web API comes back from one SQL query in seconds, so
+ * this is strongly preferred when the tool runs there.
+ *
+ * The replica has no thumbnail URLs — those are derived from the file name
+ * and its MD5, exactly as MediaWiki does it.
+ */
+class ReplicaClient
+{
+    private ?Connection $connection = null;
+
+    /** @param array<string, mixed> $settings */
+    public function __construct(
+        private readonly array $settings,
+        private readonly LoggerInterface $logger,
+    ) {
+    }
+
+    /** Whether a replica connection is configured for this deployment. */
+    public function isAvailable(): bool
+    {
+        if (empty($this->settings['host']) || empty($this->settings['user'])) {
+            return false;
+        }
+
+        try {
+            $this->connection()->executeQuery('SELECT 1');
+
+            return true;
+        } catch (\Throwable $e) {
+            $this->logger->warning('Replica unavailable, falling back to the API', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return false;
+        }
+    }
+
+    /**
+     * Every file in a category, as CommonsFile objects.
+     *
+     * One query replaces however many paginated API calls the category
+     * would otherwise need.
+     *
+     * @return list<CommonsFile>
+     */
+    public function filesInCategory(string $category): array
+    {
+        $category = str_replace(' ', '_', preg_replace('/^Category:/i', '', trim($category)) ?? '');
+
+        // Commons has normalised categorylinks: cl_to is being retired in
+        // favour of cl_target_id joined to linktarget. Joining through
+        // linktarget is what works on the current replica.
+        //
+        // Paging is by cl_from rather than OFFSET, because MariaDB re-scans
+        // and discards every skipped row for a large OFFSET — the last
+        // batches of a big category would cost far more than the first.
+        $sql = <<<'SQL'
+            SELECT
+                cl.cl_from           AS cursor_id,
+                p.page_id            AS page_id,
+                p.page_title         AS page_title,
+                img.img_width        AS width,
+                img.img_height       AS height,
+                img.img_major_mime   AS major_mime,
+                img.img_minor_mime   AS minor_mime,
+                img.img_timestamp    AS uploaded_at,
+                actor.actor_name     AS uploader
+            FROM categorylinks cl
+            INNER JOIN linktarget lt ON lt.lt_id = cl.cl_target_id
+            INNER JOIN page p        ON p.page_id = cl.cl_from
+            INNER JOIN image img     ON img.img_name = p.page_title
+            LEFT JOIN actor          ON actor.actor_id = img.img_actor
+            WHERE lt.lt_title = :category
+              AND lt.lt_namespace = 14
+              AND p.page_namespace = 6
+              AND cl.cl_from > :after
+            ORDER BY cl.cl_from ASC
+            LIMIT :batch
+            SQL;
+
+        $files = [];
+        $after = 0;
+        $batch = (int) ($this->settings['batch_size'] ?? 5000);
+
+        do {
+            $rows = $this->connection()->executeQuery(
+                $sql,
+                ['category' => $category, 'after' => $after, 'batch' => $batch],
+                [
+                    'category' => \PDO::PARAM_STR,
+                    'after' => \PDO::PARAM_INT,
+                    'batch' => \PDO::PARAM_INT,
+                ],
+            )->fetchAllAssociative();
+
+            foreach ($rows as $row) {
+                $after = max($after, (int) $row['cursor_id']);
+                $file = $this->toFile($row);
+
+                if ($file !== null) {
+                    $files[] = $file;
+                }
+            }
+        } while (count($rows) === $batch);
+
+        $this->logger->info('Category read from replica', [
+            'category' => $category,
+            'files' => count($files),
+        ]);
+
+        return $files;
+    }
+
+    /**
+     * Resolves file titles in one query.
+     *
+     * @param list<string> $titles
+     * @return list<CommonsFile>
+     */
+    public function filesByTitle(array $titles): array
+    {
+        $normalised = [];
+
+        foreach ($titles as $title) {
+            $title = trim(preg_replace('/^File:/i', '', trim($title)) ?? '');
+
+            if ($title !== '') {
+                $normalised[] = str_replace(' ', '_', $title);
+            }
+        }
+
+        if ($normalised === []) {
+            return [];
+        }
+
+        $sql = <<<'SQL'
+            SELECT
+                p.page_id            AS page_id,
+                p.page_title         AS page_title,
+                img.img_width        AS width,
+                img.img_height       AS height,
+                img.img_major_mime   AS major_mime,
+                img.img_minor_mime   AS minor_mime,
+                img.img_timestamp    AS uploaded_at,
+                actor.actor_name     AS uploader
+            FROM page p
+            JOIN image img     ON img.img_name = p.page_title
+            LEFT JOIN actor    ON actor.actor_id = img.img_actor
+            WHERE p.page_namespace = 6 AND p.page_title IN (:titles)
+            SQL;
+
+        $rows = $this->connection()->executeQuery(
+            $sql,
+            ['titles' => $normalised],
+            ['titles' => \Doctrine\DBAL\ArrayParameterType::STRING],
+        )->fetchAllAssociative();
+
+        return array_values(array_filter(array_map(
+            fn (array $row): ?CommonsFile => $this->toFile($row),
+            $rows,
+        )));
+    }
+
+    /** How many files a category holds, without fetching them. */
+    public function countCategory(string $category): int
+    {
+        $category = str_replace(' ', '_', preg_replace('/^Category:/i', '', trim($category)) ?? '');
+
+        return (int) $this->connection()->executeQuery(
+            'SELECT COUNT(*)
+             FROM categorylinks cl
+             INNER JOIN linktarget lt ON lt.lt_id = cl.cl_target_id
+             INNER JOIN page p ON p.page_id = cl.cl_from
+             WHERE lt.lt_title = :category
+               AND lt.lt_namespace = 14
+               AND p.page_namespace = 6',
+            ['category' => $category],
+        )->fetchOne();
+    }
+
+    /**
+     * Builds a CommonsFile from a replica row.
+     *
+     * @param array<string, mixed> $row
+     */
+    private function toFile(array $row): ?CommonsFile
+    {
+        $title = (string) $row['page_title'];
+        $mime = trim(sprintf('%s/%s', $row['major_mime'] ?? '', $row['minor_mime'] ?? ''), '/');
+
+        // Video and audio live in the File namespace too; only bitmaps are
+        // judged here.
+        if ($mime !== '' && !str_starts_with($mime, 'image/')) {
+            return null;
+        }
+
+        $timestamp = null;
+
+        if (!empty($row['uploaded_at'])) {
+            $parsed = DateTimeImmutable::createFromFormat('YmdHis', (string) $row['uploaded_at']);
+            $timestamp = $parsed !== false ? $parsed : null;
+        }
+
+        $width = (int) ($row['width'] ?? 0);
+
+        return new CommonsFile(
+            pageId: (int) $row['page_id'],
+            title: 'File:' . str_replace('_', ' ', $title),
+            fileUrl: $this->fileUrl($title),
+            descriptionUrl: 'https://commons.wikimedia.org/wiki/File:' . rawurlencode($title),
+            thumbUrl: $this->thumbUrl($title, min($width ?: 1024, (int) $this->settings['thumb_width'])),
+            width: $width,
+            height: (int) ($row['height'] ?? 0),
+            mimeType: $mime !== '' ? $mime : null,
+            uploader: isset($row['uploader']) ? str_replace('_', ' ', (string) $row['uploader']) : null,
+            uploadedAt: $timestamp,
+        );
+    }
+
+    /**
+     * The upload path MediaWiki uses: two levels of directory taken from
+     * the MD5 of the file name.
+     */
+    private function fileUrl(string $title): string
+    {
+        $hash = md5($title);
+
+        return sprintf(
+            'https://upload.wikimedia.org/wikipedia/commons/%s/%s/%s',
+            $hash[0],
+            substr($hash, 0, 2),
+            rawurlencode($title),
+        );
+    }
+
+    private function thumbUrl(string $title, int $width): string
+    {
+        $hash = md5($title);
+
+        return sprintf(
+            'https://upload.wikimedia.org/wikipedia/commons/thumb/%s/%s/%s/%dpx-%s',
+            $hash[0],
+            substr($hash, 0, 2),
+            rawurlencode($title),
+            $width,
+            rawurlencode($title),
+        );
+    }
+
+    private function connection(): Connection
+    {
+        return $this->connection ??= DriverManager::getConnection([
+            'driver' => 'pdo_mysql',
+            'host' => (string) $this->settings['host'],
+            'port' => (int) ($this->settings['port'] ?? 3306),
+            'dbname' => (string) $this->settings['dbname'],
+            'user' => (string) $this->settings['user'],
+            'password' => (string) ($this->settings['password'] ?? ''),
+            'charset' => 'utf8mb4',
+        ]);
+    }
+}

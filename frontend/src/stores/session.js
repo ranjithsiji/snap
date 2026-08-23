@@ -12,16 +12,16 @@ export const useSession = defineStore('session', () => {
 
   const isAuthenticated = computed(() => user.value !== null)
 
-  // Mirrors UserRole::impliedRoles() on the server: an administrator can
-  // do everything, an organizer only reads results, a juror only votes.
-  // The server enforces this regardless; here it drives what is shown.
-  const isAdministrator = computed(() => user.value?.role === 'administrator')
-  const isOrganizer = computed(
-    () => user.value?.role === 'administrator' || user.value?.role === 'organizer',
-  )
-  const isJuror = computed(
-    () => user.value?.role === 'administrator' || user.value?.role === 'juror',
-  )
+  // Mirrors UserRole::impliedRoles() on the server. These drive what the
+  // menu offers; the server enforces the real, scoped permissions, since a
+  // lead's authority covers only their own project.
+  const rank = { admin: 4, lead: 3, organizer: 2, jury: 1 }
+  const level = computed(() => rank[user.value?.role] ?? 0)
+
+  const isAdministrator = computed(() => level.value >= rank.admin)
+  const isLead = computed(() => level.value >= rank.lead)
+  const isOrganizer = computed(() => level.value >= rank.organizer)
+  const isJuror = computed(() => level.value >= rank.jury)
 
   async function load() {
     try {
@@ -51,6 +51,7 @@ export const useSession = defineStore('session', () => {
     loaded,
     isAuthenticated,
     isAdministrator,
+    isLead,
     isOrganizer,
     isJuror,
     load,

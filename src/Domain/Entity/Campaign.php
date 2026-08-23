@@ -23,6 +23,11 @@ class Campaign
     #[ORM\Column(type: 'integer')]
     private ?int $id = null;
 
+    /** The contest family this is an edition of. */
+    #[ORM\ManyToOne(targetEntity: Project::class, inversedBy: 'campaigns')]
+    #[ORM\JoinColumn(name: 'project_id', nullable: false, onDelete: 'CASCADE')]
+    private Project $project;
+
     #[ORM\Column(type: 'string', length: 255)]
     private string $name;
 
@@ -112,8 +117,9 @@ class Campaign
     )]
     private Collection $participants;
 
-    public function __construct(string $name, string $slug)
+    public function __construct(Project $project, string $name, string $slug)
     {
+        $this->project = $project;
         $this->name = $name;
         $this->slug = $slug;
         $this->createdAt = new DateTimeImmutable();
@@ -153,6 +159,11 @@ class Campaign
     public function getId(): ?int
     {
         return $this->id;
+    }
+
+    public function getProject(): Project
+    {
+        return $this->project;
     }
 
     public function getName(): string

@@ -80,7 +80,7 @@ class UserActions
             throw DomainException::badRequest("A user named '$username' already exists.");
         }
 
-        $role = UserRole::tryFrom((string) ($body['role'] ?? UserRole::Juror->value));
+        $role = UserRole::tryFrom((string) ($body['role'] ?? UserRole::Jury->value));
 
         if ($role === null) {
             throw DomainException::badRequest('A valid role is required.');
@@ -180,7 +180,7 @@ class UserActions
             return Json::write($response, ['user' => Presenter::user($user)]);
         }
 
-        if ($previous === UserRole::Administrator) {
+        if ($previous === UserRole::Admin) {
             $this->assertNotLastAdministrator($actor, $user);
         }
 
@@ -218,7 +218,7 @@ class UserActions
                 throw DomainException::badRequest('You cannot block your own account.');
             }
 
-            if ($user->getRole() === UserRole::Administrator) {
+            if ($user->getRole() === UserRole::Admin) {
                 $this->assertNotLastAdministrator($actor, $user);
             }
         }
@@ -352,7 +352,7 @@ class UserActions
             'SELECT COUNT(u.id) FROM ' . User::class . ' u
              WHERE u.role = :role AND u.isActive = true AND u.id <> :id'
         )->setParameters([
-            'role' => UserRole::Administrator->value,
+            'role' => UserRole::Admin->value,
             'id' => $target->getId(),
         ])->getSingleScalarResult();
 

@@ -6,6 +6,7 @@ namespace JuryTool\Middleware;
 
 use JuryTool\Domain\Entity\User;
 use JuryTool\Domain\Enum\UserRole;
+use JuryTool\Service\AccessControl;
 use JuryTool\Support\DomainException;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
@@ -13,14 +14,24 @@ use Psr\Http\Server\MiddlewareInterface;
 use Psr\Http\Server\RequestHandlerInterface as Handler;
 
 /**
- * Rejects requests from users who lack the required role.
+ * Requires that the user holds a role *somewhere*, as a coarse gate.
  *
- * Attach per route group; AuthenticationMiddleware must have run first.
+ * Real authority is scoped to a project or campaign, so this cannot be the
+ * whole check: it only keeps signed-out users and people with no standing
+ * at all off a route. The action itself asks AccessControl whether this
+ * person may act on *this* project or campaign.
+ *
+ * The distinction matters because roles are not exclusive. A lead or an
+ * organizer frequently also judges rounds, and someone who merely judges
+ * one campaign may lead another — so a route open to jurors must not
+ * exclude a lead, and vice versa.
  */
 class RequireRole implements MiddlewareInterface
 {
-    public function __construct(private readonly UserRole $required)
-    {
+    public function __construct(
+        private readonly UserRole $required,
+        private readonly AccessControl $access,
+    ) {
     }
 
     public function process(Request $request, Handler $handler): Response
@@ -31,7 +42,7 @@ class RequireRole implements MiddlewareInterface
             throw DomainException::unauthorized();
         }
 
-        if (!$user->hasRole($this->required)) {
+        if (!$this->holdsRequiredRole($user)) {
             throw DomainException::forbidden(
                 sprintf('This action requires the %s role.', $this->required->value)
             );
@@ -40,18 +51,46 @@ class RequireRole implements MiddlewareInterface
         return $handler->handle($request);
     }
 
-    public static function administrator(): self
+    /**
+     * Whether the user holds the required role, or anything above it, in
+     * any scope at all.
+     *
+     * Both the scoped grants and the baseline column are consulted: a juror
+     * invited to a round has a RoundJuror seat rather than a grant, and
+     * their baseline is what records that they may judge.
+     */
+    private function holdsRequiredRole(User $user): bool
     {
-        return new self(UserRole::Administrator);
+        if ($user->getRole()->covers($this->required)) {
+            return true;
+        }
+
+        foreach ($this->access->assignmentsFor($user) as $assignment) {
+            if ($assignment->getRole()->covers($this->required)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
-    public static function organizer(): self
+    public static function admin(AccessControl $access): self
     {
-        return new self(UserRole::Organizer);
+        return new self(UserRole::Admin, $access);
     }
 
-    public static function juror(): self
+    public static function lead(AccessControl $access): self
     {
-        return new self(UserRole::Juror);
+        return new self(UserRole::Lead, $access);
+    }
+
+    public static function organizer(AccessControl $access): self
+    {
+        return new self(UserRole::Organizer, $access);
+    }
+
+    public static function jury(AccessControl $access): self
+    {
+        return new self(UserRole::Jury, $access);
     }
 }
