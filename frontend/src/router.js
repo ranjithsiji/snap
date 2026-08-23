@@ -126,12 +126,21 @@ router.beforeEach(async (to) => {
     return { name: 'login', query: { redirect: to.fullPath } }
   }
 
-  if (to.meta.role === 'admin' && !session.isAdmin) {
-    return { name: 'home' }
+  // Keyed to what the store actually exposes. These previously tested
+  // session.isAdmin and session.isCoordinator against meta.role values of
+  // 'administrator' and 'organizer' — neither the properties nor the
+  // values matched, so every role check passed and the admin pages were
+  // reachable by any signed-in user. The server refuses the underlying
+  // requests regardless; this keeps the menu honest.
+  const guards = {
+    administrator: session.isAdministrator,
+    lead: session.isLead,
+    organizer: session.isOrganizer,
+    jury: session.isJuror,
   }
 
-  if (to.meta.role === 'coordinator' && !session.isCoordinator) {
-    return { name: 'home' }
+  if (to.meta.role !== undefined && guards[to.meta.role] === false) {
+    return { name: 'my-rounds' }
   }
 
   return true

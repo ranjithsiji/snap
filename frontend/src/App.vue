@@ -66,7 +66,7 @@ async function logout() {
       <nav class="sitefooter-links" aria-label="Footer">
         <RouterLink :to="{ name: 'about' }">About</RouterLink>
         <a href="https://github.com/ranjithsiji/snap">Source</a>
-        <a href="https://github.com/ranjithsiji/snap/issues">Report a problem</a>
+        <a href="https://phabricator.wikimedia.org/tag/tool-snap/">Report a problem</a>
       </nav>
     </footer>
   </div>
