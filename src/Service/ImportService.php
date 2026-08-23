@@ -11,6 +11,7 @@ use JuryTool\Domain\Entity\Round;
 use JuryTool\Domain\Entity\RoundSource;
 use JuryTool\Domain\Entity\User;
 use JuryTool\Domain\Enum\SourceType;
+use JuryTool\Infrastructure\Commons\CategoryTooLargeException;
 use JuryTool\Infrastructure\Commons\CommonsClient;
 use JuryTool\Infrastructure\Commons\CommonsFile;
 use JuryTool\Infrastructure\Commons\ReplicaClient;
@@ -220,6 +221,13 @@ class ImportService
                 'imported_so_far' => $processed,
                 'error' => $e->getMessage(),
             ]);
+
+            // An oversized category is refused before anything is read, so
+            // there is nothing to resume and retrying would fail the same
+            // way. Its own message already says what to do instead.
+            if ($e instanceof CategoryTooLargeException) {
+                throw $e;
+            }
 
             throw new RuntimeException(sprintf(
                 'Import failed after %d file(s): %s. The %d file(s) already fetched were kept — '

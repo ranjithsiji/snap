@@ -148,8 +148,14 @@ return [
             ),
             'thumb_width' => (int) ($env('COMMONS_THUMB_WIDTH', '1024') ?? 1024),
             // Rows per keyset page. The replica is fast, so this is far
-            // larger than the API's 500 ceiling.
-            'batch_size' => (int) ($env('REPLICA_BATCH_SIZE', '5000') ?? 5000),
+            // larger than the API's 500 ceiling. Kept short enough that a
+            // single statement cannot hit the replica's query timeout.
+            'batch_size' => (int) ($env('REPLICA_BATCH_SIZE', '10000') ?? 10000),
+            // Above this, a category is refused rather than imported
+            // partway: every row stays in memory until the import ends.
+            // Well beyond any real campaign — Wiki Loves Earth's largest
+            // national category is a small fraction of it.
+            'max_files' => (int) ($env('REPLICA_MAX_FILES', '120000') ?? 120000),
         ];
     })(),
 

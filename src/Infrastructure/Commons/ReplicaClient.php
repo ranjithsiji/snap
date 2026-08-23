@@ -86,11 +86,23 @@ class ReplicaClient
      * One query replaces however many paginated API calls the category
      * would otherwise need.
      *
+     * @throws CategoryTooLargeException when the category exceeds the limit
      * @return list<CommonsFile>
      */
     public function filesInCategory(string $category): array
     {
         $category = str_replace(' ', '_', preg_replace('/^Category:/i', '', trim($category)) ?? '');
+
+        // Asked before reading anything. Truncating an import silently is
+        // the one outcome worth avoiding outright: a photograph missing
+        // from a round is invisible until the results are wrong, whereas a
+        // refusal names the problem while it can still be fixed.
+        $max = (int) ($this->settings['max_files'] ?? 120000);
+        $total = $this->countCategory($category);
+
+        if ($total > $max) {
+            throw new CategoryTooLargeException($category, $total, $max);
+        }
 
         // Commons has normalised categorylinks: cl_to is being retired in
         // favour of cl_target_id joined to linktarget. Joining through
@@ -125,7 +137,9 @@ class ReplicaClient
 
         $files = [];
         $after = 0;
-        $batch = (int) ($this->settings['batch_size'] ?? 5000);
+        $batch = (int) ($this->settings['batch_size'] ?? 10000);
+        $max = (int) ($this->settings['max_files'] ?? 120000);
+        $seen = 0;
 
         do {
             $rows = $this->connection()->executeQuery(
@@ -146,11 +160,27 @@ class ReplicaClient
                     $files[] = $file;
                 }
             }
+
+            $seen += count($rows);
+
+            // Every row is held in memory until the import finishes, so a
+            // category far larger than any real campaign has to stop rather
+            // than exhaust the process. Counted on rows read, not files
+            // kept, so that a category of non-images cannot loop forever.
+            if ($seen >= $max) {
+                $this->logger->warning('Category truncated at the file limit', [
+                    'category' => $category,
+                    'limit' => $max,
+                ]);
+
+                break;
+            }
         } while (count($rows) === $batch);
 
         $this->logger->info('Category read from replica', [
             'category' => $category,
             'files' => count($files),
+            'rows' => $seen,
         ]);
 
         return $files;
