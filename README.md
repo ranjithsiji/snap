@@ -283,11 +283,35 @@ user:list                          List all users
 
 campaign:list                      List campaigns
 campaign:import <id>               Re-import a campaign source
+
+round:import <id> [--populate]     Import a round's own source
 ```
 
-Large categories are best imported from the command line rather than
-through the browser, since the HTTP request would otherwise have to stay
-open for the whole fetch.
+### Importing large categories
+
+Import from the command line rather than the browser once a category runs
+to tens of thousands of files: the HTTP request would have to stay open
+for the whole fetch, and PHP's execution limit ends it long before that.
+
+```bash
+php bin/console round:import 12 --populate
+```
+
+The files are read in pages and written as they arrive, so memory stays
+flat however large the category is — measured at 16 MB while importing
+6,658 files. Progress is reported as it goes, since a silent terminal is
+indistinguishable from a hung process.
+
+Re-running is safe. Files are matched on their Commons page id and
+updated rather than duplicated, so an import interrupted halfway resumes
+from where it stopped. Without `--populate` the files land in the
+campaign pool but are not added to the round, which lets a large import
+run ahead of time and the round be filled separately.
+
+A category larger than `REPLICA_MAX_FILES` (120,000 by default) is
+refused outright rather than imported partway, because a truncated
+import is indistinguishable from a complete one until a photograph turns
+out to have gone unjudged.
 
 ## Layout
 

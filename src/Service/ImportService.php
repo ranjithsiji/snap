@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace JuryTool\Service;
 
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\PersistentCollection;
 use JuryTool\Domain\Entity\Campaign;
 use JuryTool\Domain\Entity\CampaignImage;
 use JuryTool\Domain\Entity\Round;
@@ -99,6 +100,7 @@ class ImportService
 
             if (($processed % self::BATCH_SIZE) === 0) {
                 $this->em->flush();
+                $this->detachImported($campaign);
             }
         }
 
@@ -127,8 +129,14 @@ class ImportService
      *
      * @return array{result: ImportResult, images: list<CampaignImage>}
      */
-    public function importRoundSource(Round $round, ?User $importedBy = null): array
-    {
+    public function importRoundSource(
+        Round $round,
+        ?User $importedBy = null,
+        // Called every batch, so a long import can report progress instead
+        // of looking hung. Ignored by the web path, which has nowhere to
+        // show it.
+        ?callable $onProgress = null,
+    ): array {
         if (!$round->hasOwnSource()) {
             throw new RuntimeException('This round has no source of its own configured.');
         }
@@ -147,7 +155,7 @@ class ImportService
         $this->em->persist($source);
         $this->em->flush();
 
-        return $this->runImport($round, $source);
+        return $this->runImport($round, $source, $onProgress);
     }
 
     /**
@@ -172,8 +180,11 @@ class ImportService
      *
      * @return array{result: ImportResult, warnings: list<string>, images: list<CampaignImage>}
      */
-    private function runImport(Round $round, RoundSource $source): array
-    {
+    private function runImport(
+        Round $round,
+        RoundSource $source,
+        ?callable $onProgress = null,
+    ): array {
         $campaign = $round->getCampaign();
         $existing = $this->existingPageIds($campaign);
 
@@ -204,6 +215,11 @@ class ImportService
 
                 if (($processed % self::BATCH_SIZE) === 0) {
                     $this->em->flush();
+                    $this->detachImported($campaign);
+
+                    if ($onProgress !== null) {
+                        $onProgress($processed, $added, $updated);
+                    }
                 }
             }
         } catch (\Throwable $e) {
@@ -313,7 +329,10 @@ class ImportService
 
         if ($this->replica?->isAvailable() === true) {
             return match ($type) {
-                SourceType::Category => $this->replica->filesInCategory((string) $category),
+                // Streamed rather than collected: a large category would
+                // otherwise sit in memory in full while its entities are
+                // being written.
+                SourceType::Category => $this->replica->streamFilesInCategory((string) $category),
                 SourceType::FileList => $this->replica->filesByTitle($fileList),
                 default => throw new RuntimeException('No usable source configured.'),
             };
@@ -348,6 +367,34 @@ class ImportService
         }
 
         return $ids;
+    }
+
+    /**
+     * Frees the images written so far from the identity map.
+     *
+     * flush() alone does not free them: Doctrine keeps every managed
+     * entity for the life of the request, so a category of a hundred
+     * thousand grows without bound however often it is flushed.
+     *
+     * Detached individually rather than with clear(). ORM 3 removed
+     * clear()'s per-class argument, and clearing everything would detach
+     * the campaign, round and source that stay live across the loop —
+     * after which the next persist() fails with "a new entity was found
+     * through a relationship that was not configured to cascade".
+     */
+    private function detachImported(Campaign $campaign): void
+    {
+        foreach ($this->em->getUnitOfWork()->getIdentityMap()[CampaignImage::class] ?? [] as $image) {
+            if ($image instanceof CampaignImage) {
+                $this->em->detach($image);
+            }
+        }
+
+        // The campaign's collection would otherwise still reference every
+        // detached image, holding them all alive anyway.
+        if ($campaign->getImages() instanceof PersistentCollection) {
+            $campaign->getImages()->setInitialized(false);
+        }
     }
 
     private function create(Campaign $campaign, CommonsFile $file): void

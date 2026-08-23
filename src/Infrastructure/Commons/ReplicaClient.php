@@ -83,13 +83,31 @@ class ReplicaClient
     /**
      * Every file in a category, as CommonsFile objects.
      *
-     * One query replaces however many paginated API calls the category
-     * would otherwise need.
+     * Collects the whole category into one array. Prefer
+     * streamFilesInCategory() for imports: this exists for callers that
+     * genuinely need the list at once, and its memory grows with the
+     * category.
      *
      * @throws CategoryTooLargeException when the category exceeds the limit
      * @return list<CommonsFile>
      */
     public function filesInCategory(string $category): array
+    {
+        return iterator_to_array($this->streamFilesInCategory($category), false);
+    }
+
+    /**
+     * The same files, yielded one at a time as each page is read.
+     *
+     * A category of a hundred thousand files is too large to hold in
+     * memory alongside the entities being written for it, so an import
+     * consumes this and flushes as it goes. Only one page of rows is ever
+     * resident.
+     *
+     * @throws CategoryTooLargeException when the category exceeds the limit
+     * @return \Generator<int, CommonsFile>
+     */
+    public function streamFilesInCategory(string $category): \Generator
     {
         $category = str_replace(' ', '_', preg_replace('/^Category:/i', '', trim($category)) ?? '');
 
@@ -135,11 +153,10 @@ class ReplicaClient
             LIMIT :batch
             SQL;
 
-        $files = [];
         $after = 0;
         $batch = (int) ($this->settings['batch_size'] ?? 10000);
-        $max = (int) ($this->settings['max_files'] ?? 120000);
         $seen = 0;
+        $yielded = 0;
 
         do {
             $rows = $this->connection()->executeQuery(
@@ -157,16 +174,18 @@ class ReplicaClient
                 $file = $this->toFile($row);
 
                 if ($file !== null) {
-                    $files[] = $file;
+                    $yielded++;
+
+                    yield $file;
                 }
             }
 
             $seen += count($rows);
 
-            // Every row is held in memory until the import finishes, so a
-            // category far larger than any real campaign has to stop rather
-            // than exhaust the process. Counted on rows read, not files
-            // kept, so that a category of non-images cannot loop forever.
+            // The count above is checked before any reading, so passing
+            // this means the category grew mid-import. Stopping bounds the
+            // work; counted on rows read rather than files kept, so a
+            // category of non-images cannot loop forever either.
             if ($seen >= $max) {
                 $this->logger->warning('Category truncated at the file limit', [
                     'category' => $category,
@@ -179,11 +198,9 @@ class ReplicaClient
 
         $this->logger->info('Category read from replica', [
             'category' => $category,
-            'files' => count($files),
+            'files' => $yielded,
             'rows' => $seen,
         ]);
-
-        return $files;
     }
 
     /**

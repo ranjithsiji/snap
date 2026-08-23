@@ -13,10 +13,12 @@ declare(strict_types=1);
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use JuryTool\Domain\Entity\Campaign;
+use JuryTool\Domain\Entity\Round;
 use JuryTool\Domain\Entity\User;
 use JuryTool\Domain\Entity\RoleAssignment;
 use JuryTool\Domain\Enum\UserRole;
 use JuryTool\Service\ImportService;
+use JuryTool\Service\RoundPopulationService;
 
 $app = require dirname(__DIR__) . '/config/bootstrap.php';
 $container = $app->getContainer();
@@ -174,6 +176,94 @@ try {
 
             break;
 
+        case 'round:import':
+            $id = $args[0] ?? null;
+
+            if ($id === null) {
+                echo "Usage: bin/console round:import <roundId> [--populate]\n";
+                echo "\n";
+                echo "  Imports a round's own source directly on the server.\n";
+                echo "  Intended for categories too large to import inside a\n";
+                echo "  web request, which times out well before a category of\n";
+                echo "  tens of thousands is read.\n";
+                echo "\n";
+                echo "  --populate  also add the imported files to the round\n";
+                exit(1);
+            }
+
+            $round = $em->getRepository(Round::class)->find((int) $id);
+
+            if ($round === null) {
+                echo "No such round.\n";
+                exit(1);
+            }
+
+            if (!$round->hasOwnSource()) {
+                echo "Round '{$round->getName()}' has no source of its own.\n";
+                exit(1);
+            }
+
+            $import = $container->get(ImportService::class);
+
+            printf(
+                "Importing %s into round %d (%s)\n",
+                $round->getSourceCategory() ?? $round->getSourceUrl() ?? 'file list',
+                $round->getId(),
+                $round->getName(),
+            );
+            printf("Source: %s\n\n", $import->metadataSource());
+
+            $started = microtime(true);
+
+            // Progress is written as the import runs rather than at the
+            // end: a large category takes minutes, and a silent terminal
+            // is indistinguishable from a hung process.
+            $outcome = $import->importRoundSource(
+                $round,
+                null,
+                static function (int $processed, int $added, int $updated): void {
+                    printf(
+                        "\r  %s file(s) read — %s added, %s updated",
+                        number_format($processed),
+                        number_format($added),
+                        number_format($updated),
+                    );
+                },
+            );
+
+            $result = $outcome['result'];
+
+            printf(
+                "\r  %s file(s) read — %s added, %s updated%s\n",
+                number_format($result->processed),
+                number_format($result->added),
+                number_format($result->updated),
+                str_repeat(' ', 12),
+            );
+            printf("Done in %.1fs\n", microtime(true) - $started);
+
+            foreach ($outcome['warnings'] as $warning) {
+                fwrite(STDERR, "  warning: {$warning}\n");
+            }
+
+            if (in_array('--populate', $args, true)) {
+                // Read back from the pool rather than from the import, so
+                // that memory stays flat however large the category was.
+                $population = $container->get(RoundPopulationService::class)
+                    ->populateFromCampaignPool($round);
+
+                printf(
+                    "Populated round: %d added, %d disqualified, %d skipped.\n",
+                    $population->added,
+                    $population->disqualified,
+                    $population->skipped,
+                );
+            } else {
+                echo "Run again with --populate to add these files to the round.\n";
+            }
+
+            break;
+
         case 'campaign:list':
             foreach ($em->getRepository(Campaign::class)->findAll() as $campaign) {
                 printf(
@@ -189,7 +279,7 @@ try {
 
         default:
             echo <<<TXT
-            Wiki Loves Jury Tool
+            Snap — jury tool for Wiki Loves campaigns
 
             Schema
               schema:create              Create all tables
@@ -205,6 +295,14 @@ try {
             Campaigns
               campaign:list                      List campaigns
               campaign:import <id>               Re-import a campaign source
+
+            Rounds
+              round:import <id> [--populate]     Import a round's source
+
+                Runs the import on the server rather than inside a web
+                request, which times out long before a category of tens of
+                thousands is read. Progress is reported as it goes, and the
+                import resumes rather than duplicating if re-run.
 
             TXT;
 
