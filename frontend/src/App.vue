@@ -21,21 +21,17 @@ async function logout() {
   <div class="app">
     <header class="topbar">
       <RouterLink :to="{ name: 'home' }" class="brand">
-        <span class="brand-mark">S</span>
+        <img src="/logo.svg" alt="" class="brand-mark" width="28" height="28" />
         <span>Snap</span>
       </RouterLink>
 
-      <nav v-if="session.isAuthenticated" class="topnav">
-        <RouterLink :to="{ name: 'home' }">My rounds</RouterLink>
-        <RouterLink :to="{ name: 'projects' }">Projects</RouterLink>
-        <RouterLink v-if="session.isOrganizer" :to="{ name: 'campaigns' }">Campaigns</RouterLink>
-        <RouterLink v-if="session.isAdministrator" :to="{ name: 'admin' }">Administration</RouterLink>
-        <RouterLink :to="{ name: 'about' }">About</RouterLink>
-      </nav>
-
-      <!-- Signed-out visitors land on the login page, so About is the only
-           thing to offer them in the bar. -->
-      <nav v-else class="topnav">
+      <nav class="topnav" aria-label="Main">
+        <template v-if="session.isAuthenticated">
+          <RouterLink :to="{ name: 'my-rounds' }">My rounds</RouterLink>
+          <RouterLink :to="{ name: 'projects' }">Projects</RouterLink>
+          <RouterLink v-if="session.isOrganizer" :to="{ name: 'campaigns' }">Campaigns</RouterLink>
+          <RouterLink v-if="session.isAdministrator" :to="{ name: 'admin' }">Administration</RouterLink>
+        </template>
         <RouterLink :to="{ name: 'about' }">About</RouterLink>
       </nav>
 
@@ -44,10 +40,34 @@ async function logout() {
         <CdxInfoChip>{{ session.user.role }}</CdxInfoChip>
         <CdxButton weight="quiet" @click="logout">Log out</CdxButton>
       </div>
+
+      <!-- Without this a signed-out visitor has no way in from the page
+           they land on. -->
+      <div v-else class="topbar-user">
+        <CdxButton
+          action="progressive"
+          weight="primary"
+          @click="router.push({ name: 'login' })"
+        >
+          Sign in
+        </CdxButton>
+      </div>
     </header>
 
     <main class="content">
       <RouterView />
     </main>
+
+    <footer class="sitefooter">
+      <p class="sitefooter-line">
+        <strong>Snap</strong> — judging for Wiki Loves campaigns on
+        <a href="https://commons.wikimedia.org/">Wikimedia Commons</a>.
+      </p>
+      <nav class="sitefooter-links" aria-label="Footer">
+        <RouterLink :to="{ name: 'about' }">About</RouterLink>
+        <a href="https://github.com/ranjithsiji/snap">Source</a>
+        <a href="https://github.com/ranjithsiji/snap/issues">Report a problem</a>
+      </nav>
+    </footer>
   </div>
 </template>

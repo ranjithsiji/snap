@@ -192,7 +192,7 @@ const roles = [
       shown in the tool remain on Wikimedia Commons under the licences their
       authors chose.
     </p>
-    <RouterLink v-if="session.isAuthenticated" :to="{ name: 'home' }">
+    <RouterLink v-if="session.isAuthenticated" :to="{ name: 'my-rounds' }">
       Back to my rounds
     </RouterLink>
   </div>

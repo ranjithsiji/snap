@@ -2,7 +2,19 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { useSession } from '@/stores/session'
 
 const routes = [
-  { path: '/', name: 'home', component: () => import('@/views/HomeView.vue') },
+  // Public: someone arriving at the tool should be told what it is, not
+  // asked to log in before they can find out.
+  {
+    path: '/',
+    name: 'home',
+    component: () => import('@/views/LandingView.vue'),
+    meta: { public: true },
+  },
+  {
+    path: '/my-rounds',
+    name: 'my-rounds',
+    component: () => import('@/views/HomeView.vue'),
+  },
   { path: '/login', name: 'login', component: () => import('@/views/LoginView.vue'), meta: { public: true } },
 
   // Public: describes the tool to people who have not logged in, and is

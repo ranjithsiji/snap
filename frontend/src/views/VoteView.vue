@@ -171,7 +171,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         >
           {{ mode === 'single' ? 'Gallery view' : 'Single image view' }}
         </CdxButton>
-        <CdxButton @click="router.push({ name: 'home' })">Back to my rounds</CdxButton>
+        <CdxButton @click="router.push({ name: 'my-rounds' })">Back to my rounds</CdxButton>
       </div>
     </div>
 
@@ -215,7 +215,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
     <div v-else-if="exhausted || !current" class="card empty">
       <h2>All done</h2>
       <p>You have judged every image in this round. Thank you.</p>
-      <CdxButton action="progressive" weight="primary" @click="router.push({ name: 'home' })">
+      <CdxButton action="progressive" weight="primary" @click="router.push({ name: 'my-rounds' })">
         Back to my rounds
       </CdxButton>
     </div>

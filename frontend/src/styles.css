@@ -21,12 +21,16 @@ body {
   flex-direction: column;
 }
 
+/* Wraps rather than fixing a height: the bar carries the brand, up to
+   four links and the account controls, which do not fit on one line on a
+   phone. */
 .topbar {
   display: flex;
   align-items: center;
   gap: var(--spacing-150);
-  padding: 0 var(--spacing-150);
-  height: 3.5rem;
+  flex-wrap: wrap;
+  padding: var(--spacing-50) var(--spacing-150);
+  min-height: 3.5rem;
   background-color: var(--background-color-base);
   border-bottom: var(--border-base);
 }
@@ -40,15 +44,12 @@ body {
   text-decoration: none;
 }
 
+/* The logo is a rounded square already, so it needs no background or
+   shape of its own. */
 .brand-mark {
-  display: grid;
-  place-items: center;
+  display: block;
   width: 1.75rem;
   height: 1.75rem;
-  border-radius: var(--border-radius-circle);
-  background-color: var(--background-color-progressive);
-  color: var(--color-inverted);
-  font-size: var(--font-size-x-small);
 }
 
 .topnav {
@@ -86,6 +87,37 @@ body {
   max-width: 75rem;
   margin: 0 auto;
   padding: var(--spacing-150);
+}
+
+/* .content takes the free space, so this sits at the bottom of the
+   viewport on short pages and below the content on long ones. */
+.sitefooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-100);
+  flex-wrap: wrap;
+  width: 100%;
+  max-width: 75rem;
+  margin: 0 auto;
+  padding: var(--spacing-125) var(--spacing-150);
+  border-top: var(--border-base);
+  font-size: var(--font-size-small);
+  color: var(--color-subtle);
+}
+
+.sitefooter-line {
+  margin: 0;
+}
+
+.sitefooter-links {
+  display: flex;
+  gap: var(--spacing-100);
+  flex-wrap: wrap;
+}
+
+.sitefooter a {
+  color: var(--color-progressive);
 }
 
 /* --- Surfaces -------------------------------------------------------- */

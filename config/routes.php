@@ -135,22 +135,31 @@ return function (App $app): void {
         $public = dirname(__DIR__) . '/public';
         $path = (string) ($args['path'] ?? '');
 
-        // Files sitting at the root of the docroot — favicon.ico,
-        // logo.svg, robots.txt — reach this route rather than the web
-        // server's static handler, and returning index.html for them hands
-        // a browser HTML where it asked for an image. Serve the real file.
+        // Static files reach this route rather than a web server's static
+        // handler, and answering them with index.html hands a browser HTML
+        // where it asked for a stylesheet — which it then refuses, leaving
+        // the page unstyled. Serve the real file.
         //
-        // Only a plain filename is considered: anything with a slash could
-        // climb out of public/, and every such asset lives at the top.
-        if ($path !== '' && !str_contains($path, '/')) {
+        // Two shapes are allowed: a plain filename at the docroot
+        // (favicon.ico, logo.svg, robots.txt) and anything under assets/,
+        // which is where Vite writes the bundles. Both are matched
+        // strictly, so no path can contain a segment that climbs out of
+        // public/.
+        $isRootFile = $path !== '' && !str_contains($path, '/');
+        $isAsset = (bool) preg_match('#^assets/[A-Za-z0-9._-]+$#', $path);
+
+        if ($isRootFile || $isAsset) {
             $file = $public . '/' . $path;
 
             if (is_file($file)) {
                 $types = [
+                    'css' => 'text/css; charset=utf-8',
+                    'js' => 'text/javascript; charset=utf-8',
                     'ico' => 'image/x-icon',
                     'svg' => 'image/svg+xml',
                     'png' => 'image/png',
                     'jpg' => 'image/jpeg',
+                    'woff2' => 'font/woff2',
                     'webmanifest' => 'application/manifest+json',
                     'txt' => 'text/plain; charset=utf-8',
                     'xml' => 'application/xml',

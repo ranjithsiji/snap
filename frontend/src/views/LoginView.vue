@@ -19,7 +19,7 @@ async function submit() {
 
   try {
     await session.login(username.value, password.value)
-    router.push(route.query.redirect || { name: 'home' })
+    router.push(route.query.redirect || { name: 'my-rounds' })
   } catch (e) {
     error.value = e.message
   } finally {

@@ -204,7 +204,7 @@ function onMatrixUpdated(updated) {
           Reopen meeting
         </CdxButton>
 
-        <CdxButton @click="router.push({ name: 'home' })">Back</CdxButton>
+        <CdxButton @click="router.push({ name: 'my-rounds' })">Back</CdxButton>
       </div>
     </div>
 
