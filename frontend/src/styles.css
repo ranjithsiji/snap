@@ -152,8 +152,13 @@
   --snap-periwinkle: var(--snap-teal);
 }
 
+html {
+  overflow-x: hidden;
+}
+
 body {
   margin: 0;
+  overflow-x: hidden;
   background-color: var(--background-color-neutral-subtle);
   color: var(--color-base);
   font-family: var(--font-family-system-sans);
@@ -440,7 +445,7 @@ body {
    comparison is how much is left in each. */
 .round-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(20rem, 100%), 1fr));
   gap: var(--spacing-100);
 }
 
@@ -673,7 +678,7 @@ body {
 
 .juror-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(11rem, 100%), 1fr));
   gap: var(--spacing-100);
 }
 
@@ -920,7 +925,7 @@ body {
 
 .gallery-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(14rem, 100%), 1fr));
   gap: var(--spacing-50);
 }
 
@@ -1246,7 +1251,7 @@ body {
 
 .results-gallery {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(16rem, 100%), 1fr));
   gap: var(--spacing-100);
 }
 
@@ -1331,7 +1336,7 @@ body {
 
 .rank-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(10rem, 100%), 1fr));
   gap: var(--spacing-75);
   list-style: none;
   padding: 0;
@@ -1430,7 +1435,7 @@ body {
    so it wraps into a grid of thumbnails instead of a single column. */
 .meeting-filmstrip-standalone {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(7rem, 100%), 1fr));
   gap: var(--spacing-75);
   max-height: none;
   overflow-y: visible;
@@ -1669,7 +1674,7 @@ body {
 
 .stat-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(9rem, 100%), 1fr));
   gap: var(--spacing-100);
 }
 
