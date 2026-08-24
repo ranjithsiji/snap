@@ -334,6 +334,75 @@ async function resetPassword(user) {
   }
 }
 
+/**
+ * The full, scoped picture for one user — every project they lead, every
+ * campaign they organize, every round they judge — as opposed to the
+ * table's Role column, which is only ever a one-word summary of these.
+ */
+const rolesDialog = ref(null)
+const rolesLoading = ref(false)
+const rolesError = ref(null)
+const grantForm = ref({ role: 'lead', projectId: null, campaignId: null })
+
+const grantRoleOptions = [
+  { label: 'Lead of a project', value: 'lead' },
+  { label: 'Organizer of a campaign', value: 'organizer' },
+]
+
+async function openRoles(user) {
+  rolesDialog.value = { user, grants: [], rounds: [], projects: [], campaigns: [] }
+  rolesLoading.value = true
+  rolesError.value = null
+  grantForm.value = { role: 'lead', projectId: null, campaignId: null }
+
+  try {
+    const data = await api.get(`/admin/users/${user.id}/roles`)
+    rolesDialog.value = { user, ...data }
+  } catch (e) {
+    rolesError.value = e.message
+  } finally {
+    rolesLoading.value = false
+  }
+}
+
+async function grantScopedRole() {
+  const { role, projectId, campaignId } = grantForm.value
+  const user = rolesDialog.value.user
+
+  rolesLoading.value = true
+  rolesError.value = null
+
+  try {
+    const body = role === 'lead' ? { role, projectId } : { role, campaignId }
+    const data = await api.post(`/admin/users/${user.id}/roles`, body)
+
+    rolesDialog.value = { ...rolesDialog.value, grants: data.grants }
+    grantForm.value = { role: grantForm.value.role, projectId: null, campaignId: null }
+    await loadUsers()
+  } catch (e) {
+    rolesError.value = e.message
+  } finally {
+    rolesLoading.value = false
+  }
+}
+
+async function revokeScopedRole(grant) {
+  const user = rolesDialog.value.user
+
+  rolesLoading.value = true
+  rolesError.value = null
+
+  try {
+    const data = await api.delete(`/admin/users/${user.id}/roles/${grant.id}`)
+    rolesDialog.value = { ...rolesDialog.value, grants: data.grants }
+    await loadUsers()
+  } catch (e) {
+    rolesError.value = e.message
+  } finally {
+    rolesLoading.value = false
+  }
+}
+
 async function createUser() {
   const data = await run(() => api.post('/admin/users', newUser.value))
 
@@ -470,6 +539,13 @@ async function createUser() {
                   :disabled="busy"
                   @update:selected="setRole(user, $event)"
                 />
+                <!-- The dropdown only ever sets the summary column, which
+                     can drift from what the user is actually granted — this
+                     is what shows the real, scoped picture, and lets it be
+                     corrected. -->
+                <a href="#" class="role-scope-link" @click.prevent="openRoles(user)">
+                  Which project or campaign?
+                </a>
               </td>
               <td>
                 <!-- Three states, not two: an account that is neither linked
@@ -797,5 +873,91 @@ async function createUser() {
     <CdxMessage type="warning" inline>
       {{ deleteWarning }} This cannot be undone.
     </CdxMessage>
+  </CdxDialog>
+
+  <!-- The scoped picture the Role column can only summarise: exactly
+       which project, campaign or round, and a way to correct it — grant
+       a scoped role, or revoke one that no longer applies. -->
+  <CdxDialog
+    :open="rolesDialog !== null"
+    :title="rolesDialog ? `${rolesDialog.user.username}'s roles` : ''"
+    :use-close-button="true"
+    @update:open="(open) => { if (!open) rolesDialog = null }"
+  >
+    <template v-if="rolesDialog">
+      <CdxMessage v-if="rolesError" type="error" inline>{{ rolesError }}</CdxMessage>
+      <CdxProgressBar v-if="rolesLoading && rolesDialog.grants.length === 0 && rolesDialog.rounds.length === 0" aria-label="Loading" />
+
+      <template v-if="rolesDialog.grants.length">
+        <h3 class="vote-section" style="margin-top: 0">Leads and organizes</h3>
+        <ul class="role-grant-list">
+          <li v-for="grant in rolesDialog.grants" :key="grant.id ?? grant.role" class="row">
+            <span>
+              <strong>{{ grant.roleLabel }}</strong>
+              of {{ grant.scope }}
+            </span>
+            <span class="spacer"></span>
+            <!-- Admin has no scope to revoke here — it is set from the
+                 table's dropdown, same as it always was. -->
+            <CdxButton
+              v-if="grant.id"
+              weight="quiet"
+              action="destructive"
+              size="small"
+              :disabled="rolesLoading"
+              @click="revokeScopedRole(grant)"
+            >
+              Remove
+            </CdxButton>
+          </li>
+        </ul>
+      </template>
+      <p v-else-if="!rolesLoading" class="muted">No scoped grants — just the role shown in the table.</p>
+
+      <template v-if="rolesDialog.rounds.length">
+        <h3 class="vote-section">Judges</h3>
+        <ul class="role-grant-list">
+          <li v-for="seat in rolesDialog.rounds" :key="seat.jurorId" class="row">
+            <span>
+              {{ seat.roundName }}
+              <span class="muted">({{ seat.campaignName }}, {{ seat.state }})</span>
+            </span>
+          </li>
+        </ul>
+      </template>
+
+      <h3 class="vote-section">Grant a role</h3>
+      <div class="row" style="gap: 0.5rem; align-items: flex-end; flex-wrap: wrap">
+        <CdxField style="min-width: 12rem">
+          <template #label>Role</template>
+          <CdxSelect v-model:selected="grantForm.role" :menu-items="grantRoleOptions" />
+        </CdxField>
+
+        <CdxField v-if="grantForm.role === 'lead'" style="min-width: 14rem">
+          <template #label>Project</template>
+          <CdxSelect
+            v-model:selected="grantForm.projectId"
+            :menu-items="rolesDialog.projects.map((p) => ({ label: p.name, value: p.id }))"
+          />
+        </CdxField>
+
+        <CdxField v-else style="min-width: 14rem">
+          <template #label>Campaign</template>
+          <CdxSelect
+            v-model:selected="grantForm.campaignId"
+            :menu-items="rolesDialog.campaigns.map((c) => ({ label: `${c.name} (${c.projectName})`, value: c.id }))"
+          />
+        </CdxField>
+
+        <CdxButton
+          action="progressive"
+          weight="primary"
+          :disabled="rolesLoading || (grantForm.role === 'lead' ? !grantForm.projectId : !grantForm.campaignId)"
+          @click="grantScopedRole"
+        >
+          Grant
+        </CdxButton>
+      </div>
+    </template>
   </CdxDialog>
 </template>
