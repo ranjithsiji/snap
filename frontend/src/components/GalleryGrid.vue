@@ -125,8 +125,17 @@ async function vote(image, score) {
 
     // On a filtered tab the image no longer belongs here.
     if (filter.value !== 'all' && filter.value !== 'favorites') {
+      const removedIndex = images.value.findIndex((i) => i.id === image.id)
       images.value = images.value.filter((i) => i.id !== image.id)
       total.value = Math.max(0, total.value - 1)
+
+      // Voting from the lightbox on a filtered tab removes the very
+      // image it's showing — advance to whatever tile took its place
+      // rather than leaving a juror staring at a photo no longer in the
+      // grid behind it, closing only once there is nothing left to show.
+      if (lightbox.value?.id === image.id) {
+        lightbox.value = images.value[removedIndex] ?? images.value[removedIndex - 1] ?? null
+      }
     }
 
     emit('voted')
