@@ -1229,6 +1229,18 @@ body {
   top: var(--spacing-100);
 }
 
+.filmstrip-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-25);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background-color: var(--background-color-base);
+  padding-bottom: var(--spacing-25);
+}
+
 .filmstrip-item {
   position: relative;
   padding: 0;

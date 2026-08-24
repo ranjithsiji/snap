@@ -60,6 +60,29 @@ const currentIndex = computed(() =>
   images.value.findIndex((image) => String(image.imageId) === String(props.imageId)),
 )
 
+// The film strip pages rather than rendering every image in the meeting
+// at once — a meeting can carry over hundreds of images if left uncapped,
+// and a strip that size is unusable to scan and heavy enough to hang the
+// page. Prev/Next still walk the full ordered list, independent of which
+// page the strip happens to be showing.
+const FILMSTRIP_PAGE_SIZE = 25
+const filmstripPage = ref(0)
+const filmstripPageCount = computed(() =>
+  Math.max(1, Math.ceil(images.value.length / FILMSTRIP_PAGE_SIZE)),
+)
+const filmstripImages = computed(() => {
+  const start = filmstripPage.value * FILMSTRIP_PAGE_SIZE
+
+  return images.value.slice(start, start + FILMSTRIP_PAGE_SIZE)
+})
+
+/** Jumps the strip to whichever page holds the open image. */
+function showCurrentPage() {
+  if (currentIndex.value >= 0) {
+    filmstripPage.value = Math.floor(currentIndex.value / FILMSTRIP_PAGE_SIZE)
+  }
+}
+
 const previousImage = computed(() =>
   currentIndex.value > 0 ? images.value[currentIndex.value - 1] : null,
 )
@@ -178,13 +201,19 @@ async function loadComments() {
 
 onMounted(async () => {
   await loadImages()
+  showCurrentPage()
   await loadComments()
 })
 
 // Re-fetches comments when the film strip moves to a different image,
 // rather than loading them all up front — a meeting can run to hundreds
-// of images, and only one is ever being read at a time.
-watch(() => props.imageId, loadComments)
+// of images, and only one is ever being read at a time. Also keeps the
+// strip's own page following wherever Prev/Next lands, so the open
+// image is never on a page the strip is not showing.
+watch(() => props.imageId, () => {
+  showCurrentPage()
+  loadComments()
+})
 
 function goTo(image) {
   if (image) {
@@ -218,12 +247,37 @@ async function postComment() {
   <CdxMessage v-else-if="error" type="error">{{ error }}</CdxMessage>
 
   <div v-else-if="current" class="meeting-image-screen">
-    <!-- Film strip: every image in the meeting, so moving between them
-         does not mean leaving this screen and losing the discussion
-         panel each time. -->
+    <!-- Film strip, 25 at a time — every image in the meeting rendered at
+         once is what actually hung the page when a meeting was left
+         uncapped; paging keeps the strip usable regardless of how big
+         the meeting turned out. Prev/Next below still walk the full
+         ordered list and jump the strip to whichever page holds the
+         result. -->
     <div class="meeting-filmstrip">
+      <div class="filmstrip-pager">
+        <CdxButton
+          weight="quiet"
+          :disabled="filmstripPage === 0"
+          aria-label="Previous page of the film strip"
+          @click="filmstripPage--"
+        >
+          <CdxIcon :icon="cdxIconPrevious" />
+        </CdxButton>
+        <span class="muted" style="font-size: var(--font-size-x-small)">
+          {{ filmstripPage + 1 }} / {{ filmstripPageCount }}
+        </span>
+        <CdxButton
+          weight="quiet"
+          :disabled="filmstripPage >= filmstripPageCount - 1"
+          aria-label="Next page of the film strip"
+          @click="filmstripPage++"
+        >
+          <CdxIcon :icon="cdxIconNext" />
+        </CdxButton>
+      </div>
+
       <button
-        v-for="image in images"
+        v-for="image in filmstripImages"
         :key="image.imageId"
         type="button"
         class="filmstrip-item"

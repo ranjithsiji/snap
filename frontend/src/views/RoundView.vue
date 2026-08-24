@@ -111,6 +111,10 @@ function openDerive() {
 }
 
 const meetingOpen = ref(false)
+// A meeting shows every carried-over image in one screen — the film strip
+// and gallery grid page at this size, so a meeting past it is one a
+// coordinator has to click through rather than see all at once.
+const meetingSizeWarning = 25
 const meeting = ref({ name: '', topN: '' })
 
 async function submitMeeting() {
@@ -713,6 +717,20 @@ async function submitDerivation() {
         <template #description>Leave blank to bring every result into the meeting.</template>
         <CdxTextInput v-model="meeting.topN" input-type="number" min="1" />
       </CdxField>
+
+      <!-- A meeting is a shortlist a jury discusses together, not a full
+           round — leaving this uncapped on a round with hundreds of
+           qualified images creates a meeting nobody can work through, and
+           was what actually hung a browser trying to display one. -->
+      <CdxMessage
+        v-if="meeting.topN === '' && (stats?.qualifiedFiles ?? 0) > meetingSizeWarning"
+        type="warning"
+        inline
+      >
+        This round has {{ formatNumber(stats.qualifiedFiles) }} qualified images. Opening a meeting
+        without a limit brings all of them in — set "Discuss only the top N" to a shortlist the
+        panel can actually review together.
+      </CdxMessage>
     </CdxDialog>
 
     <CdxDialog
