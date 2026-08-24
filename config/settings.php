@@ -91,22 +91,23 @@ return [
         'local_login_enabled' => $bool($env('LOCAL_LOGIN_ENABLED'), true),
     ],
 
-    // Wikimedia OAuth 2.0 (authorization code flow). Register an owner-only
-    // or public consumer at:
+    // Wikimedia OAuth 2.0 (authorization code flow). Register a consumer at:
     // https://meta.wikimedia.org/wiki/Special:OAuthConsumerRegistration/propose/oauth2
     //
-    // These endpoints stay on meta.wikimedia.org even though the tool works
-    // with Commons: Wikimedia OAuth is central, so consumers are registered
-    // and tokens issued on Meta, against the unified account that is the
-    // same identity on Commons. Pointing them at commons.wikimedia.org
-    // instead would break a working setup — Commons' own API, which does
-    // live there, is configured separately below.
+    // Registration happens on Meta, but the flow itself runs on the wiki the
+    // consumer names as its "Applicable project" — Snap's is Commons, so the
+    // authorize and token endpoints are Commons'. Sending the code to Meta
+    // when it was issued for a Commons-scoped consumer gets it rejected with
+    // an unhelpful "unknown error", which is how this first went wrong.
+    //
+    // Override all three if a deployment registers against another project;
+    // a Meta-scoped consumer wants meta.wikimedia.org in each of them.
     'oauth' => [
         'client_id' => $env('OAUTH_CLIENT_ID'),
         'client_secret' => $env('OAUTH_CLIENT_SECRET'),
-        'authorize_url' => $env('OAUTH_AUTHORIZE_URL', 'https://meta.wikimedia.org/w/rest.php/oauth2/authorize'),
-        'token_url' => $env('OAUTH_TOKEN_URL', 'https://meta.wikimedia.org/w/rest.php/oauth2/access_token'),
-        'profile_url' => $env('OAUTH_PROFILE_URL', 'https://meta.wikimedia.org/w/rest.php/oauth2/resource/profile'),
+        'authorize_url' => $env('OAUTH_AUTHORIZE_URL', 'https://commons.wikimedia.org/w/rest.php/oauth2/authorize'),
+        'token_url' => $env('OAUTH_TOKEN_URL', 'https://commons.wikimedia.org/w/rest.php/oauth2/access_token'),
+        'profile_url' => $env('OAUTH_PROFILE_URL', 'https://commons.wikimedia.org/w/rest.php/oauth2/resource/profile'),
         // Must equal the callback URL registered on the consumer, character
         // for character: it is sent both when the user is redirected out and
         // again when the code is exchanged, and Wikimedia compares the two.

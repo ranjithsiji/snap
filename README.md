@@ -128,8 +128,21 @@ Errors are logged to `~/error.log`.
 Local accounts work out of the box. To let people sign in with their
 Commons account, register an OAuth 2.0 consumer at
 [Special:OAuthConsumerRegistration](https://meta.wikimedia.org/wiki/Special:OAuthConsumerRegistration/propose/oauth2)
-with callback `https://your-host/api/auth/callback` and only the *Basic
-rights* grant. Put the client id and secret in `.env`.
+with *Applicable project* `commons.wikimedia.org`, callback
+`https://your-host/wikicallback`, and only the *Basic rights* grant. Put the
+client id and secret in `.env`, along with the callback as
+`OAUTH_REDIRECT_URI`.
+
+Two details cause almost every failed setup, and Wikimedia reports both as
+an unhelpful `unknown error`:
+
+- **`OAUTH_REDIRECT_URI` must equal the registered callback exactly.** It is
+  sent again when the code is exchanged, and the two are compared.
+- **The flow runs on the applicable project, not Meta.** You register on
+  Meta, but a consumer scoped to Commons authorizes and issues tokens at
+  `commons.wikimedia.org` — which is what `OAUTH_AUTHORIZE_URL`,
+  `OAUTH_TOKEN_URL` and `OAUTH_PROFILE_URL` default to. Registering against
+  another project means overriding all three.
 
 Once OAuth works you can set `LOCAL_LOGIN_ENABLED=false` to require it.
 
