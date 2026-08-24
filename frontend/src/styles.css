@@ -812,6 +812,13 @@ body {
   background-color: var(--background-color-interactive-subtle);
   border-radius: var(--border-radius-base);
   overflow: hidden;
+  border: 2px solid transparent;
+}
+
+/* Marks the tile a juror picked to open in single-image view, so it is
+   still identifiable after they return to the grid. */
+.gallery-tile.is-picked {
+  border-color: var(--color-warning);
 }
 
 .gallery-tile img {
@@ -888,6 +895,7 @@ body {
 }
 
 .tile-zoom,
+.tile-single,
 .tile-fav {
   position: absolute;
   top: var(--spacing-50);
@@ -898,6 +906,10 @@ body {
 
 .tile-zoom {
   left: var(--spacing-50);
+}
+
+.tile-single {
+  left: calc(var(--spacing-50) + 2.25rem);
 }
 
 .tile-fav {
@@ -953,25 +965,78 @@ body {
   position: fixed;
   inset: 0;
   z-index: 100;
-  display: grid;
-  place-content: center;
-  gap: var(--spacing-50);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-100);
   padding: var(--spacing-150);
   background-color: rgb(0 0 0 / 85%);
   cursor: zoom-out;
 }
 
-.lightbox img {
-  max-width: 92vw;
-  max-height: 85vh;
+.lightbox-image {
+  flex: 1;
+  min-width: 0;
+  max-width: 78vw;
+  max-height: 90vh;
   object-fit: contain;
+  cursor: default;
 }
 
-.lightbox-caption {
-  color: #fff;
-  text-align: center;
-  margin: 0;
+/* A dedicated grey panel rather than the dark backdrop showing through:
+   the same reasoning as the single-image view's sidebar — facts read
+   better against a surface than floating over whatever the photograph
+   happens to show behind them. */
+.lightbox-panel {
+  flex: 0 0 20rem;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: var(--spacing-125);
+  border-radius: var(--border-radius-base);
+  background-color: var(--background-color-base);
+  cursor: default;
+}
+
+.lightbox-panel-head {
+  align-items: flex-start;
+  gap: var(--spacing-75);
+  margin-bottom: var(--spacing-75);
+}
+
+.lightbox-panel-head .vote-filename {
+  flex: 1;
+}
+
+.lightbox-panel-link {
+  display: inline-block;
+  margin-top: var(--spacing-75);
   font-size: var(--font-size-small);
+}
+
+/* Shown only once the panel is minimised, so there is still a way back
+   to it without closing and reopening the lightbox. */
+.lightbox-restore {
+  position: absolute;
+  top: var(--spacing-150);
+  right: var(--spacing-150);
+  background-color: var(--background-color-base);
+}
+
+@media (max-width: 60rem) {
+  .lightbox {
+    flex-direction: column;
+  }
+
+  .lightbox-image {
+    max-width: 92vw;
+    max-height: 55vh;
+  }
+
+  .lightbox-panel {
+    flex-basis: auto;
+    width: 92vw;
+    max-height: 30vh;
+  }
 }
 
 /* --- Results gallery -------------------------------------------------- */

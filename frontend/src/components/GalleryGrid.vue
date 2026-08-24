@@ -1,6 +1,13 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import { CdxButton, CdxMessage, CdxProgressBar, CdxTabs, CdxTab } from '@wikimedia/codex'
+import { CdxButton, CdxIcon, CdxMessage, CdxProgressBar, CdxTabs, CdxTab } from '@wikimedia/codex'
+import {
+  cdxIconCheck,
+  cdxIconClose,
+  cdxIconCollapse,
+  cdxIconExpand,
+  cdxIconFullscreen,
+} from '@wikimedia/codex-icons'
 import { api } from '@/api'
 import { formatNumber } from '@/format'
 
@@ -14,9 +21,17 @@ import { formatNumber } from '@/format'
 const props = defineProps({
   round: { type: Object, required: true },
   counts: { type: Object, required: true },
+  // Held by the parent rather than as local state: switching to single
+  // view unmounts this component entirely (v-else-if in VoteView), which
+  // would otherwise reset the pick the moment it was made.
+  pickedId: { type: [Number, String], default: null },
 })
 
-const emit = defineEmits(['voted'])
+const emit = defineEmits(['voted', 'open-single'])
+
+function pick(image) {
+  emit('open-single', image)
+}
 
 const PAGE_SIZE = 60
 
@@ -28,6 +43,11 @@ const loading = ref(true)
 const error = ref(null)
 const localCounts = ref({ ...props.counts })
 const lightbox = ref(null)
+
+// Remembered across images rather than reset per-open: once a juror
+// minimises the details, re-opening it for every next image they inspect
+// would be the opposite of what dismissing it meant.
+const lightboxDetailsOpen = ref(true)
 
 const isYesNo = computed(() => props.round.votingMethod === 'yesno')
 const stars = computed(() => Array.from({ length: props.round.maxRating ?? 5 }, (_, i) => i + 1))
@@ -181,7 +201,12 @@ async function toggleFavorite(image) {
   </div>
 
   <div v-else class="gallery-grid">
-    <figure v-for="image in images" :key="image.id" class="gallery-tile">
+    <figure
+      v-for="image in images"
+      :key="image.id"
+      class="gallery-tile"
+      :class="{ 'is-picked': pickedId === image.id }"
+    >
       <img :src="image.gridUrl ?? image.thumbUrl" :alt="image.name ?? 'Contest image'" loading="lazy" />
 
       <div class="gallery-overlay">
@@ -194,6 +219,18 @@ async function toggleFavorite(image) {
           ⤢
         </button>
 
+        <!-- Separate from the lightbox above: this hands the image to the
+             single-image flow, where a vote can actually be cast on it,
+             rather than just showing it bigger. -->
+        <button
+          type="button"
+          class="tile-action tile-single"
+          aria-label="Open in single view"
+          @click="pick(image)"
+        >
+          <CdxIcon :icon="cdxIconFullscreen" />
+        </button>
+
         <div class="tile-votes">
           <template v-if="isYesNo">
             <button
@@ -204,7 +241,7 @@ async function toggleFavorite(image) {
               :disabled="image.busy"
               @click="vote(image, 1)"
             >
-              👍
+              <CdxIcon :icon="cdxIconCheck" />
             </button>
             <button
               type="button"
@@ -214,7 +251,7 @@ async function toggleFavorite(image) {
               :disabled="image.busy"
               @click="vote(image, 0)"
             >
-              👎
+              <CdxIcon :icon="cdxIconClose" />
             </button>
           </template>
 
@@ -247,9 +284,87 @@ async function toggleFavorite(image) {
     </figure>
   </div>
 
-  <!-- Lightbox: a closer look without leaving the grid -->
+  <!-- Lightbox: a closer look without leaving the grid. The details panel
+       is what makes this useful for actually judging rather than just
+       peeking — the full image and its facts on one screen, without the
+       trip out to single-image view. -->
   <div v-if="lightbox" class="lightbox" @click="lightbox = null">
-    <img :src="lightbox.fileUrl ?? lightbox.thumbUrl" :alt="lightbox.name ?? 'Contest image'" />
-    <p v-if="lightbox.name" class="lightbox-caption">{{ lightbox.name }}</p>
+    <img
+      class="lightbox-image"
+      :src="lightbox.fileUrl ?? lightbox.thumbUrl"
+      :alt="lightbox.name ?? 'Contest image'"
+    />
+
+    <aside
+      v-if="lightboxDetailsOpen"
+      class="lightbox-panel"
+      @click.stop
+    >
+      <div class="row lightbox-panel-head">
+        <h2 class="vote-filename">{{ lightbox.name ?? 'Contest image' }}</h2>
+        <CdxButton
+          weight="quiet"
+          aria-label="Minimise details"
+          title="Minimise details"
+          @click="lightboxDetailsOpen = false"
+        >
+          <CdxIcon :icon="cdxIconCollapse" />
+        </CdxButton>
+      </div>
+
+      <template v-if="lightbox.width || lightbox.megapixels || lightbox.uploader">
+        <h3 class="vote-section">Image</h3>
+        <dl class="stat-list">
+          <div v-if="lightbox.width">
+            <dt>Resolution</dt>
+            <dd>{{ lightbox.width }} × {{ lightbox.height }}</dd>
+          </div>
+          <div v-if="lightbox.megapixels">
+            <dt>Megapixels</dt>
+            <dd>{{ lightbox.megapixels }} Mpix</dd>
+          </div>
+          <div v-if="lightbox.uploader">
+            <dt>Uploader</dt>
+            <dd>{{ lightbox.uploader }}</dd>
+          </div>
+        </dl>
+      </template>
+
+      <template v-if="lightbox.score !== undefined">
+        <h3 class="vote-section">Your vote</h3>
+        <p class="muted">
+          <template v-if="lightbox.score === null || lightbox.score === undefined">
+            Not yet judged
+          </template>
+          <template v-else-if="isYesNo">
+            {{ lightbox.score === 1 ? 'Accepted' : 'Declined' }}
+          </template>
+          <template v-else>{{ lightbox.score }} star(s)</template>
+        </p>
+      </template>
+
+      <a
+        v-if="lightbox.descriptionUrl"
+        class="lightbox-panel-link"
+        :href="lightbox.descriptionUrl"
+        target="_blank"
+        rel="noopener"
+      >
+        Open the Commons page
+      </a>
+    </aside>
+
+    <!-- Only shown once minimised: with the panel open, the collapse
+         button inside it already does this job. -->
+    <CdxButton
+      v-else
+      weight="quiet"
+      class="lightbox-restore"
+      aria-label="Show details"
+      title="Show details"
+      @click.stop="lightboxDetailsOpen = true"
+    >
+      <CdxIcon :icon="cdxIconExpand" />
+    </CdxButton>
   </div>
 </template>

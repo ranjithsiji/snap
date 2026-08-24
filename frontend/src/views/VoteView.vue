@@ -38,6 +38,18 @@ const busy = ref(false)
 const error = ref(null)
 const exhausted = ref(false)
 
+// True only while a fresh queue is being fetched after the last image in
+// hand was used up. Without this, the gap between images.shift() emptying
+// the list and loadQueue()'s response landing rendered as "All done" —
+// indistinguishable from genuine exhaustion, even mid-round.
+const fetchingNext = ref(false)
+
+// The gallery tile a juror picked to inspect in single view, so its
+// highlight survives the round trip — the gallery component itself
+// unmounts (v-else-if) while single view is showing, so this cannot live
+// as its local state.
+const pickedImageId = ref(null)
+
 // "single" walks one image at a time; "gallery" is the fast grid pass.
 const mode = ref('single')
 const showFullSize = ref(false)
@@ -83,12 +95,32 @@ async function loadRound() {
   handover.value = data.handover ?? null
 }
 
-async function loadQueue() {
-  const limit = isRanking.value ? 200 : 1
-  const data = await api.get(`/my/rounds/${props.id}/queue?limit=${limit}`)
+/**
+ * Opens one specific image, picked from the gallery, in the single-image
+ * flow — where a vote can actually be cast on it, unlike the gallery's
+ * lightbox. It replaces whatever the queue was showing rather than being
+ * inserted into it: this is a juror choosing to look at this photograph
+ * now, not the next one due.
+ */
+function openInSingleView(image) {
+  images.value = [image]
+  exhausted.value = false
+  mode.value = 'single'
+  pickedImageId.value = image.id
+}
 
-  images.value = data.images
-  exhausted.value = data.exhausted
+async function loadQueue() {
+  fetchingNext.value = true
+
+  try {
+    const limit = isRanking.value ? 200 : 1
+    const data = await api.get(`/my/rounds/${props.id}/queue?limit=${limit}`)
+
+    images.value = data.images
+    exhausted.value = data.exhausted
+  } finally {
+    fetchingNext.value = false
+  }
 }
 
 onMounted(async () => {
@@ -243,8 +275,17 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
       v-else-if="mode === 'gallery'"
       :round="round"
       :counts="counts"
+      :picked-id="pickedImageId"
       @voted="loadRound"
+      @open-single="openInSingleView"
     />
+
+    <!-- Between one image and the next: without this branch, the moment
+         the used-up image leaves the queue looked identical to genuinely
+         running out, mid-round. -->
+    <div v-else-if="fetchingNext" class="card empty">
+      <CdxProgressBar aria-label="Loading the next image" />
+    </div>
 
     <!-- All caught up -->
     <div v-else-if="exhausted || !current" class="card empty">
@@ -294,6 +335,19 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
             @click="window.open(current.descriptionUrl, '_blank', 'noopener')"
           >
             <CdxIcon :icon="cdxIconLink" />
+          </CdxButton>
+
+          <!-- The Commons page above is the file's wiki entry; this is the
+               raw image itself, for when a juror wants to inspect the
+               original rather than the description. -->
+          <CdxButton
+            v-if="current.fileUrl"
+            weight="quiet"
+            class="stage-tool"
+            title="Open the original file"
+            @click="window.open(current.fileUrl, '_blank', 'noopener')"
+          >
+            <CdxIcon :icon="cdxIconDownload" />
           </CdxButton>
 
           <CdxButton
@@ -362,7 +416,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
           </p>
         </div>
 
-        <template v-if="current.width || current.megapixels">
+        <template v-if="current.width || current.megapixels || current.uploader">
           <h3 class="vote-section">Image</h3>
           <dl class="stat-list">
             <div v-if="current.width">
@@ -372,6 +426,12 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
             <div v-if="current.megapixels">
               <dt>Megapixels</dt>
               <dd>{{ current.megapixels }} Mpix</dd>
+            </div>
+            <!-- Only present when the round has opted out of blind judging;
+                 the field is withheld server-side otherwise. -->
+            <div v-if="current.uploader">
+              <dt>Uploader</dt>
+              <dd>{{ current.uploader }}</dd>
             </div>
           </dl>
         </template>
