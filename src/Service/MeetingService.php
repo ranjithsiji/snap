@@ -63,6 +63,14 @@ class MeetingService
         $meeting = new Round($source->getCampaign(), $name);
         $meeting->setVotingMethod(VotingMethod::Meeting);
         $meeting->setDerivedFrom($source);
+
+        // Active from the moment it exists: a meeting has no image import
+        // or juror allocation to wait on — every juror sees every image —
+        // and there is no "Activate" button anywhere in its screen. Left
+        // in the default Draft state, it was invisible to every juror
+        // except whoever was redirected straight to it at creation: the
+        // dashboard's own round list explicitly excludes Draft rounds.
+        $meeting->setState(RoundState::Active);
         $meeting->setDerivationCriteria(
             $topN !== null
                 ? sprintf('final meeting on the top %d of %s', $topN, $source->getName())
