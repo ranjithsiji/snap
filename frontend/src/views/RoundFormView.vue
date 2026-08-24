@@ -1,10 +1,9 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   CdxButton,
   CdxCheckbox,
-  CdxChipInput,
   CdxField,
   CdxMessage,
   CdxRadio,
@@ -12,6 +11,7 @@ import {
   CdxTextArea,
   CdxTextInput,
 } from '@wikimedia/codex'
+import CommonsChipInput from '@/components/CommonsChipInput.vue'
 import CommonsLookup from '@/components/CommonsLookup.vue'
 import { api } from '@/api'
 
@@ -58,39 +58,12 @@ const form = ref({
   },
 })
 
-// CdxChipInput works with {value} objects; the API takes plain usernames.
-const jurorChips = ref([])
-const jurorSuggestions = ref([])
-const jurorSearch = ref('')
+// Plain usernames; CommonsChipInput owns the chips and the lookup.
+const jurors = ref([])
 
 const busy = ref(false)
 const error = ref(null)
 const targetCampaignId = ref(props.campaignId)
-
-let debounce = null
-
-watch(jurorSearch, (value) => {
-  clearTimeout(debounce)
-
-  if (value.trim().length < 2) {
-    jurorSuggestions.value = []
-    return
-  }
-
-  // Commons is a shared resource: query on a pause, not every keystroke.
-  debounce = setTimeout(async () => {
-    try {
-      const data = await api.get(`/commons/users?q=${encodeURIComponent(value.trim())}`)
-      const chosen = jurorChips.value.map((chip) => chip.value)
-
-      jurorSuggestions.value = data.users
-        .filter((name) => !chosen.includes(name))
-        .map((name) => ({ label: name, value: name }))
-    } catch {
-      jurorSuggestions.value = []
-    }
-  }, 250)
-})
 
 onMounted(async () => {
   if (!isEdit.value) return
@@ -118,7 +91,7 @@ onMounted(async () => {
       },
     }
 
-    jurorChips.value = data.jurors.map((juror) => ({ label: juror.username, value: juror.username }))
+    jurors.value = data.jurors.map((juror) => juror.username)
   } catch (e) {
     error.value = e.message
   }
@@ -133,7 +106,7 @@ async function submit() {
     quorum: Number(form.value.quorum) || 0,
     maxRating: Number(form.value.maxRating) || 5,
     votingDeadline: form.value.votingDeadline || null,
-    jurors: jurorChips.value.map((chip) => chip.value),
+    jurors: jurors.value,
     fileSettings: {
       ...form.value.fileSettings,
       minResolutionPixels: Number(form.value.fileSettings.minResolutionPixels) || 2000000,
@@ -238,11 +211,9 @@ async function submit() {
           <template #description>
             Enter the username of the juror you want to add to this round.
           </template>
-          <CdxChipInput
-            v-model:input-chips="jurorChips"
-            v-model:input-value="jurorSearch"
-            :menu-items="jurorSuggestions"
-            separate-input
+          <CommonsChipInput
+            v-model="jurors"
+            placeholder="Search Commons for a juror…"
           />
         </CdxField>
       </div>
