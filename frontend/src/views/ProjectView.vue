@@ -6,11 +6,11 @@ import {
   CdxDialog,
   CdxField,
   CdxInfoChip,
-  CdxLookup,
   CdxMessage,
   CdxProgressBar,
   CdxTextInput,
 } from '@wikimedia/codex'
+import CommonsLookup from '@/components/CommonsLookup.vue'
 import { api } from '@/api'
 import { formatNumber } from '@/format'
 
@@ -32,12 +32,9 @@ const notice = ref(null)
 
 const leadOpen = ref(false)
 const leadName = ref('')
-const suggestions = ref([])
 
 const campaignOpen = ref(false)
 const campaign = ref({ name: '', year: new Date().getFullYear(), sourceCategory: '' })
-
-let debounce = null
 
 async function load() {
   loading.value = true
@@ -56,26 +53,6 @@ async function load() {
 }
 
 onMounted(load)
-
-// Commons username autocomplete, debounced so the API is not hit per keystroke.
-function onLeadInput(value) {
-  leadName.value = value
-  clearTimeout(debounce)
-
-  if (value.trim().length < 2) {
-    suggestions.value = []
-    return
-  }
-
-  debounce = setTimeout(async () => {
-    try {
-      const data = await api.get(`/commons/users?q=${encodeURIComponent(value.trim())}`)
-      suggestions.value = data.users.map((name) => ({ label: name, value: name }))
-    } catch {
-      suggestions.value = []
-    }
-  }, 250)
-}
 
 async function appointLead() {
   busy.value = true
@@ -249,12 +226,10 @@ async function createCampaign() {
     >
       <CdxField>
         <template #label>Wikimedia username</template>
-        <CdxLookup
-          :selected="leadName"
-          :menu-items="suggestions"
+        <CommonsLookup
+          v-model="leadName"
+          kind="users"
           placeholder="Start typing a username…"
-          @update:selected="leadName = $event"
-          @input="onLeadInput($event.target.value)"
         />
       </CdxField>
     </CdxDialog>

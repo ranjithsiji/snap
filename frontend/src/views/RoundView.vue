@@ -1,16 +1,16 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   CdxButton,
   CdxDialog,
   CdxField,
   CdxInfoChip,
-  CdxLookup,
   CdxMessage,
   CdxProgressBar,
   CdxTextInput,
 } from '@wikimedia/codex'
+import CommonsLookup from '@/components/CommonsLookup.vue'
 import { api } from '@/api'
 import { formatDeadline, formatNumber, formatPixels } from '@/format'
 
@@ -32,34 +32,12 @@ const derivePreview = ref(null)
 const replaceOpen = ref(false)
 const replaceTarget = ref(null)
 const replaceUsername = ref('')
-const replaceSuggestions = ref([])
-
-let replaceDebounce = null
 
 function openReplace(juror) {
   replaceTarget.value = juror
   replaceUsername.value = ''
-  replaceSuggestions.value = []
   replaceOpen.value = true
 }
-
-watch(replaceUsername, (value) => {
-  clearTimeout(replaceDebounce)
-
-  if (value.trim().length < 2) {
-    replaceSuggestions.value = []
-    return
-  }
-
-  replaceDebounce = setTimeout(async () => {
-    try {
-      const data = await api.get(`/commons/users?q=${encodeURIComponent(value.trim())}`)
-      replaceSuggestions.value = data.users.map((name) => ({ label: name, value: name }))
-    } catch {
-      replaceSuggestions.value = []
-    }
-  }, 250)
-})
 
 async function submitReplacement() {
   if (!replaceUsername.value.trim()) return
@@ -421,10 +399,9 @@ async function submitDerivation() {
 
       <CdxField style="margin-top: 0.75rem">
         <template #label>New juror's Wikimedia username</template>
-        <CdxLookup
-          v-model:selected="replaceUsername"
-          v-model:input-value="replaceUsername"
-          :menu-items="replaceSuggestions"
+        <CommonsLookup
+          v-model="replaceUsername"
+          kind="users"
           placeholder="Start typing a username…"
         />
       </CdxField>
