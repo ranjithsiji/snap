@@ -41,7 +41,7 @@ async function submit() {
         action="progressive"
         weight="primary"
         style="width: 100%; margin-top: 1.5rem"
-        @click="location.href = '/api/auth/wikimedia'"
+        @click="window.location.href = '/api/auth/wikimedia'"
       >
         Log in with Wikimedia
       </CdxButton>
