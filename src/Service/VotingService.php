@@ -153,6 +153,14 @@ class VotingService
      */
     public function nextImagesFor(Round $round, User $user, int $limit = 1): array
     {
+        // A round that is not taking votes has nothing to judge. Without
+        // this the queue kept handing out photographs after the round was
+        // finalized or its deadline passed, and the juror only found out
+        // when castVote refused the verdict they had just reached.
+        if (!$round->acceptsVotes()) {
+            return [];
+        }
+
         $juror = $this->resolveJuror($round, $user);
         $quorum = $round->effectiveQuorum();
 

@@ -39,14 +39,18 @@ class RoundDerivationService
     {
         $method = $source->getVotingMethod();
 
+        // Selected through the root alias, and grouped by it. Selecting the
+        // joined 'ci' alone is a semantical error — "cannot select entity
+        // through identification variables without choosing at least one
+        // root entity alias" — which made every derivation fail outright.
         $qb = $this->em->createQueryBuilder()
-            ->select('ci AS image', 'COUNT(v.id) AS voteCount', 'AVG(v.score) AS averageScore')
+            ->select('ri', 'COUNT(v.id) AS voteCount', 'AVG(v.score) AS averageScore')
             ->addSelect('SUM(CASE WHEN v.score = 1 THEN 1 ELSE 0 END) AS acceptCount')
             ->from(RoundImage::class, 'ri')
             ->join('ri.image', 'ci')
             ->leftJoin('ri.votes', 'v')
             ->where('ri.round = :round')
-            ->groupBy('ci.id')
+            ->groupBy('ri.id')
             ->setParameter('round', $source);
 
         if (!$criteria->includeDisqualified) {
@@ -100,9 +104,12 @@ class RoundDerivationService
             $qb->setMaxResults($criteria->topN);
         }
 
+        // With the root selected, the entity arrives under key 0 and the
+        // aggregates alongside it. The campaign image is what the new round
+        // is built from, so it is unwrapped here.
         $images = [];
         foreach ($qb->getQuery()->getResult() as $row) {
-            $images[] = $row['image'];
+            $images[] = $row[0]->getImage();
         }
 
         return $images;
