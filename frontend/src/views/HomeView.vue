@@ -1,13 +1,28 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
-import { CdxButton, CdxInfoChip, CdxMessage, CdxProgressBar } from '@wikimedia/codex'
+import { CdxButton, CdxIcon, CdxInfoChip, CdxMessage, CdxProgressBar } from '@wikimedia/codex'
+import {
+  cdxIconCheckAll,
+  cdxIconSortVertical,
+  cdxIconStar,
+  cdxIconUserGroup,
+} from '@wikimedia/codex-icons'
 import { api } from '@/api'
 import { useSession } from '@/stores/session'
 import { formatDeadline, formatNumber } from '@/format'
 
 const session = useSession()
 const router = useRouter()
+
+// One icon per voting method, on a colour distinct enough to tell round
+// types apart at a glance across a whole page of cards.
+const votingMethodBadges = {
+  yesno: { icon: cdxIconCheckAll, class: 'round-badge-yesno' },
+  rating: { icon: cdxIconStar, class: 'round-badge-rating' },
+  rank: { icon: cdxIconSortVertical, class: 'round-badge-rank' },
+  meeting: { icon: cdxIconUserGroup, class: 'round-badge-meeting' },
+}
 
 const rounds = ref([])
 
@@ -83,8 +98,19 @@ onMounted(async () => {
         <span class="muted round-card-method">{{ round.votingMethodLabel }}</span>
       </div>
 
-      <h2 class="round-card-title">{{ round.name }}</h2>
-      <p class="muted round-card-campaign">{{ round.campaignName }}</p>
+      <div class="row round-card-title-row">
+        <span
+          v-if="votingMethodBadges[round.votingMethod]"
+          class="round-badge"
+          :class="votingMethodBadges[round.votingMethod].class"
+        >
+          <CdxIcon :icon="votingMethodBadges[round.votingMethod].icon" />
+        </span>
+        <div>
+          <h2 class="round-card-title">{{ round.name }}</h2>
+          <p class="muted round-card-campaign">{{ round.campaignName }}</p>
+        </div>
+      </div>
 
       <template v-if="round.myProgress">
         <div class="meter round-card-meter">

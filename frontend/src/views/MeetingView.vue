@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import {
   CdxButton,
   CdxField,
@@ -11,6 +11,7 @@ import {
   CdxTab,
   CdxTabs,
   CdxTextArea,
+  CdxTextInput,
 } from '@wikimedia/codex'
 import {
   cdxIconArrowDown,
@@ -37,6 +38,7 @@ import OpinionThread from '@/components/OpinionThread.vue'
  */
 const props = defineProps({ id: { type: String, required: true } })
 const router = useRouter()
+const route = useRoute()
 const session = useSession()
 
 const round = ref(null)
@@ -57,8 +59,13 @@ const newPost = ref('')
 // proposals beside each image), a gallery grid, and a film strip — some
 // coordinators want to scan every photograph at once rather than read
 // down a list, others want the compact strip used elsewhere in the
-// meeting for quickly jumping into a single image to discuss.
-const rankingView = ref('list')
+// meeting for quickly jumping into a single image to discuss. Seeded
+// from the URL so a link from the per-image discuss screen's own view
+// switcher lands here already showing the same view.
+const validRankingViews = ['list', 'gallery', 'filmstrip']
+const rankingView = ref(
+  validRankingViews.includes(route.query.view) ? route.query.view : 'list',
+)
 const lightbox = ref(null)
 const lightboxDetailsOpen = ref(true)
 
@@ -131,6 +138,65 @@ async function moveImage(index, direction) {
     const matrix = await api.get(`/meetings/${props.id}/proposals`)
     images.value = matrix.images
     revision.value = matrix.revision
+  } catch (e) {
+    error.value = e.message
+  } finally {
+    busy.value = false
+  }
+}
+
+// Gallery-view position field, per tile — typing a new position moves
+// the image there and shifts the rest, same insert-and-shift behaviour
+// as a juror's own ranking gallery, but resubmitted through reorder()
+// since this is the shared agreed order, not one juror's proposal.
+const galleryDrafts = ref({})
+
+// The moved tile briefly highlights after landing on its new position —
+// typing a number can send the tile somewhere else in the grid, and
+// without this the reorder is easy to miss having actually happened.
+const justMovedId = ref(null)
+let justMovedTimer = null
+
+function flashMoved(imageId) {
+  clearTimeout(justMovedTimer)
+  justMovedId.value = imageId
+  justMovedTimer = setTimeout(() => {
+    justMovedId.value = null
+  }, 1500)
+}
+
+function galleryPosition(image) {
+  return galleryDrafts.value[image.imageId] ?? String(image.position)
+}
+
+async function applyGalleryRank(image, rawValue) {
+  galleryDrafts.value[image.imageId] = rawValue
+
+  const requested = Number(rawValue)
+
+  if (!Number.isInteger(requested) || requested < 1) return
+
+  const target = Math.min(requested, images.value.length)
+  const changedIndex = images.value.findIndex((i) => i.imageId === image.imageId)
+
+  if (changedIndex === -1 || target === image.position) return
+
+  busy.value = true
+  error.value = null
+
+  try {
+    const others = images.value.filter((i) => i.imageId !== image.imageId)
+    others.splice(target - 1, 0, image)
+
+    const order = others.map((i) => i.imageId)
+
+    await api.post(`/meetings/${props.id}/order`, { order, revision: revision.value })
+
+    const matrix = await api.get(`/meetings/${props.id}/proposals`)
+    images.value = matrix.images
+    revision.value = matrix.revision
+    galleryDrafts.value = {}
+    flashMoved(image.imageId)
   } catch (e) {
     error.value = e.message
   } finally {
@@ -336,10 +402,15 @@ function onMatrixUpdated(updated) {
            lightbox for a closer look — the list stays for reading who
            proposed what, this is for scanning the set as photographs. -->
       <div v-else-if="rankingView === 'gallery'" class="gallery-grid">
-        <figure v-for="image in images" :key="image.imageId" class="gallery-tile meeting-gallery-tile">
+        <figure
+          v-for="image in images"
+          :key="image.imageId"
+          class="gallery-tile meeting-gallery-tile"
+          :class="{ 'is-just-moved': justMovedId === image.imageId }"
+        >
           <img :src="image.thumbUrl" :alt="image.title" loading="lazy" />
-
           <span class="meeting-gallery-position">#{{ image.position }}</span>
+
           <CdxInfoChip v-if="image.isConflict" status="warning" class="meeting-gallery-conflict">
             disputed
           </CdxInfoChip>
@@ -354,7 +425,15 @@ function onMatrixUpdated(updated) {
           </button>
 
           <figcaption class="rank-caption">
-            <span class="muted">{{ image.title }}</span>
+            <CdxTextInput
+              :model-value="galleryPosition(image)"
+              input-type="number"
+              min="1"
+              :max="images.length"
+              :disabled="isFinalized || busy"
+              :aria-label="`Position for ${image.title}`"
+              @update:model-value="applyGalleryRank(image, $event)"
+            />
           </figcaption>
         </figure>
       </div>

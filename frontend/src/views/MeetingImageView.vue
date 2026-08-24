@@ -10,7 +10,15 @@ import {
   CdxTextArea,
   CdxTextInput,
 } from '@wikimedia/codex'
-import { cdxIconDownload, cdxIconLink, cdxIconNext, cdxIconPrevious } from '@wikimedia/codex-icons'
+import {
+  cdxIconDownload,
+  cdxIconImageGallery,
+  cdxIconImageLayoutThumbnail,
+  cdxIconLink,
+  cdxIconListBullet,
+  cdxIconNext,
+  cdxIconPrevious,
+} from '@wikimedia/codex-icons'
 import { api } from '@/api'
 import { useSession } from '@/stores/session'
 
@@ -294,6 +302,36 @@ async function postComment() {
         <CdxButton weight="quiet" @click="router.push({ name: 'meeting', params: { id } })">
           Back to meeting
         </CdxButton>
+
+        <!-- Jumps back to the meeting's own ranking tab already showing
+             the chosen view — the same three views the tab itself
+             switches between, reachable from single-image view too. -->
+        <CdxButton
+          weight="quiet"
+          aria-label="List view"
+          title="List view"
+          @click="router.push({ name: 'meeting', params: { id }, query: { view: 'list' } })"
+        >
+          <CdxIcon :icon="cdxIconListBullet" />
+        </CdxButton>
+        <CdxButton
+          weight="quiet"
+          aria-label="Gallery view"
+          title="Gallery view"
+          @click="router.push({ name: 'meeting', params: { id }, query: { view: 'gallery' } })"
+        >
+          <CdxIcon :icon="cdxIconImageGallery" />
+        </CdxButton>
+        <CdxButton
+          weight="quiet"
+          class="is-active-view"
+          aria-label="Film strip view"
+          title="Film strip view"
+          @click="router.push({ name: 'meeting', params: { id }, query: { view: 'filmstrip' } })"
+        >
+          <CdxIcon :icon="cdxIconImageLayoutThumbnail" />
+        </CdxButton>
+
         <span class="spacer"></span>
         <CdxButton weight="quiet" :disabled="!previousImage" @click="goTo(previousImage)">
           <CdxIcon :icon="cdxIconPrevious" /> Previous
