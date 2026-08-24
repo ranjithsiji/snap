@@ -85,24 +85,26 @@ const does = [
         </div>
       </div>
 
-      <!-- A still of the voting screen, drawn rather than screenshotted so
-           it needs no real photographs and stays true after redesigns. -->
-      <div class="hero-panel" aria-hidden="true">
-        <div class="panel-bar">
+      <!-- The voting screen as a juror sees it, around an illustration
+           rather than a real entry: no photographer's work is used to
+           advertise the tool, and nothing here goes stale. -->
+      <div class="hero-panel">
+        <div class="panel-bar" aria-hidden="true">
+          <span class="panel-position">12 of 6,658</span>
+          <span class="spacer"></span>
           <span class="panel-dot"></span>
           <span class="panel-dot"></span>
           <span class="panel-dot"></span>
-          <span class="panel-title">Round 2 · Rating</span>
         </div>
 
-        <div class="panel-grid">
-          <div v-for="n in 6" :key="n" class="panel-tile" :class="`tile-${n}`">
-            <span class="panel-stars">{{ '★'.repeat(((n * 2) % 3) + 3) }}</span>
-          </div>
+        <div class="panel-image">
+          <img src="/Village_scene.svg" alt="" width="3840" height="2160" />
         </div>
 
-        <div class="panel-foot">
-          <span>1,248 of 6,658 judged</span>
+        <div class="panel-foot" aria-hidden="true">
+          <span class="panel-accept">Accept</span>
+          <span class="panel-decline">Decline</span>
+          <span class="spacer"></span>
           <span class="panel-meter"><span :style="{ width: '19%' }"></span></span>
         </div>
       </div>
@@ -216,82 +218,90 @@ const does = [
 .hero-panel {
   border-radius: 12px;
   overflow: hidden;
-  background-color: var(--snap-navy);
+  background-color: var(--background-color-base);
+  border: 1px solid var(--border-color-subtle);
   box-shadow: 0 12px 32px var(--snap-shadow), 0 2px 8px var(--snap-shadow);
 }
 
-.panel-bar {
+.panel-bar,
+.panel-foot {
   display: flex;
   align-items: center;
-  gap: var(--spacing-25);
+  gap: var(--spacing-50);
   padding: var(--spacing-50) var(--spacing-75);
-  background-color: rgba(0, 0, 0, 0.25);
+  background-color: var(--background-color-interactive-subtle);
+  font-size: var(--font-size-x-small);
+  color: var(--color-subtle);
+}
+
+.panel-bar {
+  border-bottom: 1px solid var(--border-color-subtle);
+}
+
+.panel-foot {
+  border-top: 1px solid var(--border-color-subtle);
+}
+
+.panel-position {
+  font-weight: var(--font-weight-bold);
+  color: var(--color-base);
+  font-variant-numeric: tabular-nums;
 }
 
 .panel-dot {
   width: 0.5rem;
   height: 0.5rem;
   border-radius: var(--border-radius-circle);
-  background-color: rgba(255, 255, 255, 0.25);
+  background-color: var(--border-color-base);
 }
 
-.panel-title {
-  margin-left: var(--spacing-50);
-  color: rgba(255, 255, 255, 0.7);
-  font-size: var(--font-size-x-small);
-}
-
-.panel-grid {
+/* Grey, matching the voting screen's default backdrop rather than
+   inventing a look the tool does not have. */
+.panel-image {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--spacing-50);
-  padding: var(--spacing-75);
+  place-items: center;
+  background-color: #808080;
+  padding: var(--spacing-50);
 }
 
-/* Stand-ins for photographs: tinted blocks, so the panel needs no real
-   images and cannot misrepresent anyone's work. */
-.panel-tile {
-  aspect-ratio: 4 / 3;
-  border-radius: 6px;
-  display: flex;
-  align-items: flex-end;
-  padding: var(--spacing-25);
-  background: linear-gradient(140deg, #2b4a8f, #1b2360);
+.panel-image img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 22rem;
+  object-fit: contain;
 }
 
-.tile-2 { background: linear-gradient(140deg, #3f5aa6, #232a6b); }
-.tile-3 { background: linear-gradient(140deg, #24427f, #141c50); }
-.tile-4 { background: linear-gradient(140deg, #35508f, #1d2560); }
-.tile-5 { background: linear-gradient(140deg, #4a63b0, #263070); }
-.tile-6 { background: linear-gradient(140deg, #1f3a72, #121a4a); }
-
-.panel-stars {
-  font-size: 0.625rem;
-  color: var(--snap-periwinkle);
-  letter-spacing: 0.05em;
+.panel-accept,
+.panel-decline {
+  padding: var(--spacing-12) var(--spacing-50);
+  border-radius: var(--border-radius-base);
+  font-weight: var(--font-weight-bold);
 }
 
-.panel-foot {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-75);
-  padding: var(--spacing-50) var(--spacing-75) var(--spacing-75);
-  color: rgba(255, 255, 255, 0.65);
-  font-size: var(--font-size-x-small);
+.panel-accept {
+  background-color: var(--background-color-progressive);
+  color: var(--color-inverted);
+}
+
+.panel-decline {
+  border: 1px solid var(--border-color-destructive, #d9534f);
+  color: var(--color-destructive, #d9534f);
 }
 
 .panel-meter {
   flex: 1;
+  max-width: 8rem;
   height: 0.25rem;
   border-radius: var(--border-radius-pill);
-  background-color: rgba(255, 255, 255, 0.15);
+  background-color: var(--background-color-interactive);
   overflow: hidden;
 }
 
 .panel-meter span {
   display: block;
   height: 100%;
-  background-color: var(--snap-periwinkle);
+  background-color: var(--color-progressive);
 }
 
 /* --- About ----------------------------------------------------------- */
@@ -373,7 +383,6 @@ const does = [
    read as one sentence, and a definition list gave each its own row of
    scaffolding for no gain. */
 .tech-prose {
-  max-width: 44rem;
   margin: 0;
   color: var(--color-subtle);
   line-height: var(--line-height-medium);

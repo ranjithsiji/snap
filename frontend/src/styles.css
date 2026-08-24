@@ -54,7 +54,9 @@
   --border-color-subtle: #e6e9f4;
 
   --snap-shadow: rgba(20, 23, 85, 0.06);
-  --snap-bar: var(--snap-navy);
+  /* The chrome colour: bar and footer, so the page is framed top and
+     bottom by the same band. */
+  --snap-bar: #0a3f6e;
 }
 
 /* --- Dark mode --------------------------------------------------------
@@ -256,19 +258,29 @@ body {
 
 /* .content takes the free space, so this sits at the bottom of the
    viewport on short pages and below the content on long ones. */
+/* The same band as the topbar, so the page is framed rather than
+   trailing off. Full-bleed, with the contents held to the same measure
+   as .content above it. */
 .sitefooter {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--spacing-100);
   flex-wrap: wrap;
+  /* box-sizing keeps the padding inside the width; without it the
+     centring padding is added to 100% and the page scrolls sideways. */
+  box-sizing: border-box;
   width: 100%;
-  max-width: 75rem;
-  margin: 0 auto;
-  padding: var(--spacing-125) var(--spacing-150);
-  border-top: var(--border-base);
+  margin-top: var(--spacing-200);
+  padding: var(--spacing-125) max(var(--spacing-150), calc((100% - 75rem) / 2));
+  background-color: var(--snap-bar);
+  border-top: 0;
   font-size: var(--font-size-small);
-  color: var(--color-subtle);
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.sitefooter strong {
+  color: #fff;
 }
 
 .sitefooter-line {
@@ -282,7 +294,12 @@ body {
 }
 
 .sitefooter a {
-  color: var(--color-progressive);
+  color: #fff;
+  text-decoration: underline;
+}
+
+.sitefooter a:hover {
+  color: var(--snap-periwinkle);
 }
 
 /* --- Surfaces -------------------------------------------------------- */

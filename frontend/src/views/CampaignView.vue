@@ -3,12 +3,12 @@ import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   CdxButton,
-  CdxChipInput,
   CdxField,
   CdxInfoChip,
   CdxMessage,
   CdxProgressBar,
 } from '@wikimedia/codex'
+import CommonsChipInput from '@/components/CommonsChipInput.vue'
 import { api } from '@/api'
 import { formatDeadline, formatNumber } from '@/format'
 
@@ -42,7 +42,7 @@ async function load() {
     participants.value = data.participants
 
     for (const { key } of roles) {
-      chips.value[key] = (data.participants[key] ?? []).map((name) => ({ label: name, value: name }))
+      chips.value[key] = [...(data.participants[key] ?? [])]
     }
   } catch (e) {
     error.value = e.message
@@ -61,7 +61,7 @@ async function saveParticipants(role) {
   try {
     await api.put(`/campaigns/${props.id}/participants`, {
       role,
-      usernames: chips.value[role].map((chip) => chip.value),
+      usernames: chips.value[role],
     })
     notice.value = 'Participants saved.'
   } catch (e) {
@@ -163,7 +163,10 @@ async function reimport() {
         <div class="card">
           <CdxField v-for="role in roles" :key="role.key">
             <template #label>{{ role.label }}</template>
-            <CdxChipInput v-model:input-chips="chips[role.key]" />
+            <CommonsChipInput
+              v-model="chips[role.key]"
+              :placeholder="`Search Commons for ${role.label.toLowerCase()}…`"
+            />
             <template #help-text>
               <CdxButton :disabled="busy" @click="saveParticipants(role.key)">Save</CdxButton>
             </template>
