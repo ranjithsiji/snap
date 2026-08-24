@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   CdxButton,
@@ -19,6 +19,7 @@ import {
   cdxIconNext,
 } from '@wikimedia/codex-icons'
 import { api } from '@/api'
+import { fetchDescription } from '@/commons'
 import { formatNumber } from '@/format'
 import GalleryGrid from '@/components/GalleryGrid.vue'
 import RankBoard from '@/components/RankBoard.vue'
@@ -82,6 +83,44 @@ const backdropLabel = computed(
 )
 
 const current = computed(() => images.value[0] ?? null)
+
+/**
+ * The open image's description, read from Commons by the browser.
+ *
+ * Not stored by this tool: the text lives on Commons, changes there, and
+ * is wanted for one image at a time — fetching it per view keeps it
+ * current and costs the import nothing.
+ */
+const description = ref(null)
+const descriptionLoading = ref(false)
+
+watch(
+  () => current.value?.commonsPageId,
+  async (pageId) => {
+    description.value = null
+
+    if (pageId === undefined || pageId === null) return
+
+    descriptionLoading.value = true
+
+    try {
+      const text = await fetchDescription(pageId)
+
+      // Voting is quick, and a slow reply can land after the juror has
+      // moved on; without this check it would appear under the next
+      // photograph as if it described that one.
+      if (current.value?.commonsPageId === pageId) {
+        description.value = text
+      }
+    } finally {
+      if (current.value?.commonsPageId === pageId) {
+        descriptionLoading.value = false
+      }
+    }
+  },
+  { immediate: true },
+)
+
 const isRanking = computed(() => round.value?.votingMethod === 'rank')
 const isYesNo = computed(() => round.value?.votingMethod === 'yesno')
 const stars = computed(() => Array.from({ length: round.value?.maxRating ?? 5 }, (_, i) => i + 1))
@@ -427,6 +466,14 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
             {{ formatNumber(remaining) }} left of {{ formatNumber(counts.all) }}
           </p>
         </div>
+
+        <!-- Read from Commons by the browser rather than stored here, so
+             it reflects whatever the file's page says now. -->
+        <template v-if="descriptionLoading || description">
+          <h3 class="vote-section">Description</h3>
+          <p v-if="descriptionLoading" class="muted vote-description">Loading…</p>
+          <p v-else class="vote-description">{{ description }}</p>
+        </template>
 
         <template v-if="current.width || current.megapixels || current.uploader">
           <h3 class="vote-section">Image</h3>

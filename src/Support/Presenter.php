@@ -207,6 +207,12 @@ final class Presenter
             // action. This is the same file the thumbnail derives from, so
             // it reveals nothing the juror cannot already see.
             'fileUrl' => $image->getFileUrl(),
+            // Lets the browser ask Commons for the file's description
+            // itself, rather than this server fetching and storing text it
+            // only ever passes straight through. Unconditional: it names a
+            // page whose URL is already in fileUrl above, so it discloses
+            // nothing the settings below are gating.
+            'commonsPageId' => $image->getCommonsPageId(),
         ];
 
         if ($settings->showsFilename()) {

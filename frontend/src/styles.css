@@ -895,6 +895,19 @@ body {
   font-weight: var(--font-weight-bold);
 }
 
+/* Commons descriptions run from three words to several paragraphs, and a
+   long one would otherwise push the voting controls off the panel.
+   Capped and scrollable, so the panel's height never depends on how much
+   an uploader chose to write. */
+.vote-description {
+  margin: 0;
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-medium);
+  max-height: 9rem;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+}
+
 .vote-hint {
   font-size: var(--font-size-x-small);
   margin: var(--spacing-75) 0 0;
