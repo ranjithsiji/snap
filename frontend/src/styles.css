@@ -1203,25 +1203,17 @@ body {
   box-shadow: 0 2px 6px rgb(0 0 0 / 35%);
 }
 
-/* Moves through the set without closing the lightbox — scanning
-   through every image is the point of opening it in the first place. */
-.lightbox-nav {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 1;
-  background-color: var(--background-color-base);
-  border: var(--border-base);
-  box-shadow: 0 2px 6px rgb(0 0 0 / 35%);
-  cursor: pointer;
+/* Moves through the set without closing the lightbox — scanning through
+   every image is the point of opening it in the first place. Placed in
+   the details panel rather than floating at the screen edges: those
+   were easy to miss and sat half-covered by the panel itself. */
+.lightbox-panel-nav {
+  gap: var(--spacing-75);
+  margin-top: var(--spacing-75);
 }
 
-.lightbox-prev {
-  left: var(--spacing-150);
-}
-
-.lightbox-next {
-  right: var(--spacing-150);
+.lightbox-panel-nav .cdx-button {
+  flex: 1;
 }
 
 @media (max-width: 60rem) {

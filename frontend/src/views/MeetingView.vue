@@ -545,25 +545,6 @@ function lightboxStep(direction) {
   <div v-if="lightbox" class="lightbox" @click="lightbox = null">
     <img class="lightbox-image" :src="lightbox.fileUrl ?? lightbox.thumbUrl" :alt="lightbox.title" />
 
-    <CdxButton
-      weight="quiet"
-      class="lightbox-nav lightbox-prev"
-      aria-label="Previous image"
-      :disabled="lightboxIndex <= 0"
-      @click.stop="lightboxStep(-1)"
-    >
-      <CdxIcon :icon="cdxIconPrevious" />
-    </CdxButton>
-    <CdxButton
-      weight="quiet"
-      class="lightbox-nav lightbox-next"
-      aria-label="Next image"
-      :disabled="lightboxIndex === -1 || lightboxIndex >= images.length - 1"
-      @click.stop="lightboxStep(1)"
-    >
-      <CdxIcon :icon="cdxIconNext" />
-    </CdxButton>
-
     <aside v-if="lightboxDetailsOpen" class="lightbox-panel" @click.stop>
       <div class="row lightbox-panel-head">
         <h2 class="vote-filename">{{ lightbox.title }}</h2>
@@ -609,6 +590,21 @@ function lightboxStep(direction) {
       >
         View & discuss
       </CdxButton>
+
+      <div class="row lightbox-panel-nav">
+        <CdxButton
+          :disabled="lightboxIndex <= 0"
+          @click="lightboxStep(-1)"
+        >
+          <CdxIcon :icon="cdxIconPrevious" /> Prev
+        </CdxButton>
+        <CdxButton
+          :disabled="lightboxIndex === -1 || lightboxIndex >= images.length - 1"
+          @click="lightboxStep(1)"
+        >
+          Next <CdxIcon :icon="cdxIconNext" />
+        </CdxButton>
+      </div>
 
       <a
         v-if="lightbox.descriptionUrl"
