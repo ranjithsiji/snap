@@ -323,35 +323,32 @@ function lightboxStep(direction) {
     <!-- Agreed ranking, with every juror's proposal beside it -->
     <template v-if="tab === 'ranking'">
       <div class="gallery-toolbar">
-        <span class="muted">{{ images.length }} image(s)</span>
-        <span class="spacer"></span>
         <CdxButton
           weight="quiet"
           :class="{ 'is-active-view': rankingView === 'list' }"
           aria-label="List view"
-          title="List view"
           @click="rankingView = 'list'"
         >
-          <CdxIcon :icon="cdxIconListBullet" />
+          <CdxIcon :icon="cdxIconListBullet" /> List
         </CdxButton>
         <CdxButton
           weight="quiet"
           :class="{ 'is-active-view': rankingView === 'gallery' }"
           aria-label="Gallery view"
-          title="Gallery view"
           @click="rankingView = 'gallery'"
         >
-          <CdxIcon :icon="cdxIconImageGallery" />
+          <CdxIcon :icon="cdxIconImageGallery" /> Gallery
         </CdxButton>
         <CdxButton
           weight="quiet"
           :class="{ 'is-active-view': rankingView === 'filmstrip' }"
           aria-label="Film strip view"
-          title="Film strip view"
           @click="rankingView = 'filmstrip'"
         >
-          <CdxIcon :icon="cdxIconImageLayoutThumbnail" />
+          <CdxIcon :icon="cdxIconImageLayoutThumbnail" /> Film strip
         </CdxButton>
+        <span class="spacer"></span>
+        <span class="muted">{{ images.length }} image(s)</span>
       </div>
 
       <div v-if="rankingView === 'list'" class="stack">

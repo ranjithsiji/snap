@@ -309,27 +309,24 @@ async function postComment() {
         <CdxButton
           weight="quiet"
           aria-label="List view"
-          title="List view"
           @click="router.push({ name: 'meeting', params: { id }, query: { view: 'list' } })"
         >
-          <CdxIcon :icon="cdxIconListBullet" />
+          <CdxIcon :icon="cdxIconListBullet" /> List
         </CdxButton>
         <CdxButton
           weight="quiet"
           aria-label="Gallery view"
-          title="Gallery view"
           @click="router.push({ name: 'meeting', params: { id }, query: { view: 'gallery' } })"
         >
-          <CdxIcon :icon="cdxIconImageGallery" />
+          <CdxIcon :icon="cdxIconImageGallery" /> Gallery
         </CdxButton>
         <CdxButton
           weight="quiet"
           class="is-active-view"
           aria-label="Film strip view"
-          title="Film strip view"
           @click="router.push({ name: 'meeting', params: { id }, query: { view: 'filmstrip' } })"
         >
-          <CdxIcon :icon="cdxIconImageLayoutThumbnail" />
+          <CdxIcon :icon="cdxIconImageLayoutThumbnail" /> Film strip
         </CdxButton>
 
         <span class="spacer"></span>
