@@ -241,6 +241,19 @@ async function setFinalized(finalized) {
 function onMatrixUpdated(updated) {
   images.value = updated
 }
+
+// Moves the open lightbox to the neighbouring image in agreed order,
+// without closing it — scanning through the set is the point of a
+// lightbox, and forcing a close-reopen for every image defeats that.
+const lightboxIndex = computed(() =>
+  lightbox.value ? images.value.findIndex((i) => i.imageId === lightbox.value.imageId) : -1,
+)
+
+function lightboxStep(direction) {
+  const next = images.value[lightboxIndex.value + direction]
+
+  if (next) lightbox.value = next
+}
 </script>
 
 <template>
@@ -531,6 +544,25 @@ function onMatrixUpdated(updated) {
   <!-- Detailed view of one image without leaving the grid. -->
   <div v-if="lightbox" class="lightbox" @click="lightbox = null">
     <img class="lightbox-image" :src="lightbox.fileUrl ?? lightbox.thumbUrl" :alt="lightbox.title" />
+
+    <CdxButton
+      weight="quiet"
+      class="lightbox-nav lightbox-prev"
+      aria-label="Previous image"
+      :disabled="lightboxIndex <= 0"
+      @click.stop="lightboxStep(-1)"
+    >
+      <CdxIcon :icon="cdxIconPrevious" />
+    </CdxButton>
+    <CdxButton
+      weight="quiet"
+      class="lightbox-nav lightbox-next"
+      aria-label="Next image"
+      :disabled="lightboxIndex === -1 || lightboxIndex >= images.length - 1"
+      @click.stop="lightboxStep(1)"
+    >
+      <CdxIcon :icon="cdxIconNext" />
+    </CdxButton>
 
     <aside v-if="lightboxDetailsOpen" class="lightbox-panel" @click.stop>
       <div class="row lightbox-panel-head">
