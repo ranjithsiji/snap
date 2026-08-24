@@ -302,6 +302,32 @@ body {
   color: var(--snap-periwinkle);
 }
 
+/* --- Buttons ----------------------------------------------------------- */
+
+/* Codex's "quiet" weight is borderless by design, meant for toolbars
+   packed with icon-only actions. Everywhere this app uses it for a
+   labelled action (move up/down, "View & discuss", view-switchers) it
+   reads as bold plain text instead of something clickable. Giving every
+   quiet button the same border normal buttons have fixes that without
+   touching the ~50 call sites individually. */
+.cdx-button--weight-quiet {
+  border: 1px solid var(--border-color-base, #a2a9b1) !important;
+  background-color: var(--background-color-base, #fff) !important;
+}
+
+.cdx-button--weight-quiet:hover:not(:disabled) {
+  background-color: var(--background-color-interactive-subtle, #f8f9fa) !important;
+}
+
+.cdx-button--weight-quiet:disabled {
+  border-color: var(--border-color-disabled, #c8ccd1) !important;
+}
+
+.cdx-button--weight-quiet.is-active-view {
+  background-color: var(--background-color-progressive-subtle, #eaf3ff) !important;
+  border-color: var(--border-color-progressive, #6485d1) !important;
+}
+
 /* --- Surfaces -------------------------------------------------------- */
 
 /* Cards sit on the page rather than being drawn on it: a soft shadow
@@ -1253,6 +1279,22 @@ body {
 
 .filmstrip-item.is-current {
   border-color: var(--border-color-progressive);
+}
+
+/* The agreed-ranking tab's film strip isn't a narrow sidebar next to a
+   main image like the per-image discuss screen's — it's the whole view,
+   so it wraps into a grid of thumbnails instead of a single column. */
+.meeting-filmstrip-standalone {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
+  gap: var(--spacing-75);
+  max-height: none;
+  overflow-y: visible;
+  position: static;
+}
+
+.meeting-filmstrip-standalone .filmstrip-pager {
+  grid-column: 1 / -1;
 }
 
 .filmstrip-item img {

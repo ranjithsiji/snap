@@ -12,7 +12,18 @@ import {
   CdxTabs,
   CdxTextArea,
 } from '@wikimedia/codex'
-import { cdxIconArrowDown, cdxIconArrowUp } from '@wikimedia/codex-icons'
+import {
+  cdxIconArrowDown,
+  cdxIconArrowUp,
+  cdxIconClose,
+  cdxIconCollapse,
+  cdxIconExpand,
+  cdxIconImageGallery,
+  cdxIconImageLayoutThumbnail,
+  cdxIconListBullet,
+  cdxIconNext,
+  cdxIconPrevious,
+} from '@wikimedia/codex-icons'
 import { api } from '@/api'
 import { useSession } from '@/stores/session'
 import OpinionThread from '@/components/OpinionThread.vue'
@@ -42,10 +53,28 @@ const notice = ref(null)
 const tab = ref('ranking')
 
 const newPost = ref('')
-// Toggles the agreed-ranking tab between the row list (per-juror proposals
-// beside each image) and a gallery grid — some coordinators want to scan
-// every photograph at once rather than read down a list.
+// Switches the agreed-ranking tab between the row list (per-juror
+// proposals beside each image), a gallery grid, and a film strip — some
+// coordinators want to scan every photograph at once rather than read
+// down a list, others want the compact strip used elsewhere in the
+// meeting for quickly jumping into a single image to discuss.
 const rankingView = ref('list')
+const lightbox = ref(null)
+const lightboxDetailsOpen = ref(true)
+
+// Paged at 25, same cap as the per-image discuss screen's own strip —
+// a meeting can carry over far more images than a strip that size can
+// usefully show at once.
+const FILMSTRIP_PAGE_SIZE = 25
+const filmstripPage = ref(0)
+const filmstripPageCount = computed(() =>
+  Math.max(1, Math.ceil(images.value.length / FILMSTRIP_PAGE_SIZE)),
+)
+const filmstripImages = computed(() => {
+  const start = filmstripPage.value * FILMSTRIP_PAGE_SIZE
+
+  return images.value.slice(start, start + FILMSTRIP_PAGE_SIZE)
+})
 
 const conflicts = computed(() => images.value.filter((i) => i.isConflict))
 
@@ -213,62 +242,161 @@ function onMatrixUpdated(updated) {
     </CdxTabs>
 
     <!-- Agreed ranking, with every juror's proposal beside it -->
-    <div v-if="tab === 'ranking'" class="stack">
-      <div v-for="(image, index) in images" :key="image.imageId" class="card meeting-row">
-        <img :src="image.thumbUrl" :alt="image.title" class="meeting-thumb" />
+    <template v-if="tab === 'ranking'">
+      <div class="gallery-toolbar">
+        <span class="muted">{{ images.length }} image(s)</span>
+        <span class="spacer"></span>
+        <CdxButton
+          weight="quiet"
+          :class="{ 'is-active-view': rankingView === 'list' }"
+          aria-label="List view"
+          title="List view"
+          @click="rankingView = 'list'"
+        >
+          <CdxIcon :icon="cdxIconListBullet" />
+        </CdxButton>
+        <CdxButton
+          weight="quiet"
+          :class="{ 'is-active-view': rankingView === 'gallery' }"
+          aria-label="Gallery view"
+          title="Gallery view"
+          @click="rankingView = 'gallery'"
+        >
+          <CdxIcon :icon="cdxIconImageGallery" />
+        </CdxButton>
+        <CdxButton
+          weight="quiet"
+          :class="{ 'is-active-view': rankingView === 'filmstrip' }"
+          aria-label="Film strip view"
+          title="Film strip view"
+          @click="rankingView = 'filmstrip'"
+        >
+          <CdxIcon :icon="cdxIconImageLayoutThumbnail" />
+        </CdxButton>
+      </div>
 
-        <div class="meeting-body">
-          <div class="row wrap">
-            <strong class="meeting-rank">#{{ image.position }}</strong>
-            <span class="muted">{{ image.title }}</span>
-            <CdxInfoChip v-if="image.isConflict" status="warning">disputed</CdxInfoChip>
-            <span class="spacer"></span>
-            <span v-if="image.drift !== 0" class="muted" style="font-size: 0.8125rem">
-              moved {{ Math.abs(image.drift) }} {{ image.drift > 0 ? 'up' : 'down' }}
-            </span>
-            <!-- Moves the agreed order directly, the same list reorder()
-                 always accepted — a swap with the neighbour, resubmitted
-                 whole, same as any other change to this order. -->
-            <div v-if="!isFinalized" class="row" style="gap: 0.125rem">
+      <div v-if="rankingView === 'list'" class="stack">
+        <div v-for="(image, index) in images" :key="image.imageId" class="card meeting-row">
+          <img :src="image.thumbUrl" :alt="image.title" class="meeting-thumb" />
+
+          <div class="meeting-body">
+            <div class="row wrap">
+              <strong class="meeting-rank">#{{ image.position }}</strong>
+              <span class="muted">{{ image.title }}</span>
+              <CdxInfoChip v-if="image.isConflict" status="warning">disputed</CdxInfoChip>
+              <span class="spacer"></span>
+              <span v-if="image.drift !== 0" class="muted" style="font-size: 0.8125rem">
+                moved {{ Math.abs(image.drift) }} {{ image.drift > 0 ? 'up' : 'down' }}
+              </span>
+              <!-- Moves the agreed order directly, the same list reorder()
+                   always accepted — a swap with the neighbour, resubmitted
+                   whole, same as any other change to this order. -->
+              <div v-if="!isFinalized" class="row" style="gap: 0.125rem">
+                <CdxButton
+                  weight="quiet"
+                  :disabled="busy || index === 0"
+                  aria-label="Move up"
+                  @click="moveImage(index, -1)"
+                >
+                  <CdxIcon :icon="cdxIconArrowUp" />
+                </CdxButton>
+                <CdxButton
+                  weight="quiet"
+                  :disabled="busy || index === images.length - 1"
+                  aria-label="Move down"
+                  @click="moveImage(index, 1)"
+                >
+                  <CdxIcon :icon="cdxIconArrowDown" />
+                </CdxButton>
+              </div>
               <CdxButton
                 weight="quiet"
-                :disabled="busy || index === 0"
-                aria-label="Move up"
-                @click="moveImage(index, -1)"
+                @click="router.push({ name: 'meeting-image', params: { id, imageId: image.imageId } })"
               >
-                <CdxIcon :icon="cdxIconArrowUp" />
-              </CdxButton>
-              <CdxButton
-                weight="quiet"
-                :disabled="busy || index === images.length - 1"
-                aria-label="Move down"
-                @click="moveImage(index, 1)"
-              >
-                <CdxIcon :icon="cdxIconArrowDown" />
+                View & discuss
               </CdxButton>
             </div>
-            <CdxButton
-              weight="quiet"
-              @click="router.push({ name: 'meeting-image', params: { id, imageId: image.imageId } })"
-            >
-              View & discuss
-            </CdxButton>
-          </div>
 
-          <div class="proposal-row">
-            <span
-              v-for="proposal in image.proposals"
-              :key="proposal.juror"
-              class="proposal-chip"
-              :title="proposal.rationale ?? ''"
-            >
-              {{ proposal.juror }}: <strong>#{{ proposal.position }}</strong>
-            </span>
-            <span v-if="image.proposals.length === 0" class="muted">No proposals yet</span>
+            <div class="proposal-row">
+              <span
+                v-for="proposal in image.proposals"
+                :key="proposal.juror"
+                class="proposal-chip"
+                :title="proposal.rationale ?? ''"
+              >
+                {{ proposal.juror }}: <strong>#{{ proposal.position }}</strong>
+              </span>
+              <span v-if="image.proposals.length === 0" class="muted">No proposals yet</span>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+
+      <!-- Gallery view: every image at once, in agreed order, with a
+           lightbox for a closer look — the list stays for reading who
+           proposed what, this is for scanning the set as photographs. -->
+      <div v-else-if="rankingView === 'gallery'" class="gallery-grid">
+        <figure v-for="image in images" :key="image.imageId" class="gallery-tile meeting-gallery-tile">
+          <img :src="image.thumbUrl" :alt="image.title" loading="lazy" />
+
+          <span class="meeting-gallery-position">#{{ image.position }}</span>
+          <CdxInfoChip v-if="image.isConflict" status="warning" class="meeting-gallery-conflict">
+            disputed
+          </CdxInfoChip>
+
+          <button
+            type="button"
+            class="tile-action tile-zoom"
+            aria-label="View larger"
+            @click="lightbox = image"
+          >
+            ⤢
+          </button>
+
+          <figcaption class="rank-caption">
+            <span class="muted">{{ image.title }}</span>
+          </figcaption>
+        </figure>
+      </div>
+
+      <!-- Film strip view: the same compact strip used on the per-image
+           discuss screen, paged at 25 — a quick way to scan the order and
+           jump straight into discussing one image. -->
+      <div v-else class="meeting-filmstrip meeting-filmstrip-standalone">
+        <div class="filmstrip-pager">
+          <CdxButton
+            weight="quiet"
+            :disabled="filmstripPage === 0"
+            aria-label="Previous page of the film strip"
+            @click="filmstripPage--"
+          >
+            <CdxIcon :icon="cdxIconPrevious" />
+          </CdxButton>
+          <span class="muted" style="font-size: var(--font-size-x-small)">
+            {{ filmstripPage + 1 }} / {{ filmstripPageCount }}
+          </span>
+          <CdxButton
+            weight="quiet"
+            :disabled="filmstripPage >= filmstripPageCount - 1"
+            aria-label="Next page of the film strip"
+            @click="filmstripPage++"
+          >
+            <CdxIcon :icon="cdxIconNext" />
+          </CdxButton>
+        </div>
+
+        <button
+          v-for="image in filmstripImages"
+          :key="image.imageId"
+          type="button"
+          class="filmstrip-item"
+          @click="router.push({ name: 'meeting-image', params: { id, imageId: image.imageId } })"
+        >
+          <img :src="image.thumbUrl" :alt="image.title" loading="lazy" />
+          <span class="filmstrip-position">#{{ image.position }}</span>
+        </button>
+      </div>
+    </template>
 
     <!-- Disputed images, with opinions and points -->
     <div v-else-if="tab === 'conflicts'" class="stack">
@@ -320,4 +448,81 @@ function onMatrixUpdated(updated) {
       </div>
     </div>
   </template>
+
+  <!-- Detailed view of one image without leaving the grid. -->
+  <div v-if="lightbox" class="lightbox" @click="lightbox = null">
+    <img class="lightbox-image" :src="lightbox.fileUrl ?? lightbox.thumbUrl" :alt="lightbox.title" />
+
+    <aside v-if="lightboxDetailsOpen" class="lightbox-panel" @click.stop>
+      <div class="row lightbox-panel-head">
+        <h2 class="vote-filename">{{ lightbox.title }}</h2>
+        <CdxButton
+          weight="quiet"
+          aria-label="Minimise details"
+          title="Minimise details"
+          @click="lightboxDetailsOpen = false"
+        >
+          <CdxIcon :icon="cdxIconCollapse" />
+        </CdxButton>
+      </div>
+
+      <h3 class="vote-section">Agreed ranking</h3>
+      <dl class="stat-list">
+        <div>
+          <dt>Position</dt>
+          <dd>#{{ lightbox.position }}</dd>
+        </div>
+        <div v-if="lightbox.width">
+          <dt>Resolution</dt>
+          <dd>{{ lightbox.width }} × {{ lightbox.height }}</dd>
+        </div>
+      </dl>
+
+      <template v-if="lightbox.proposals?.length">
+        <h3 class="vote-section">Jury proposals</h3>
+        <div class="proposal-row">
+          <span
+            v-for="proposal in lightbox.proposals"
+            :key="proposal.juror"
+            class="proposal-chip"
+            :title="proposal.rationale ?? ''"
+          >
+            {{ proposal.juror }}: <strong>#{{ proposal.position }}</strong>
+          </span>
+        </div>
+      </template>
+
+      <CdxButton
+        style="margin-top: 0.5rem"
+        @click="router.push({ name: 'meeting-image', params: { id, imageId: lightbox.imageId } })"
+      >
+        View & discuss
+      </CdxButton>
+
+      <a
+        v-if="lightbox.descriptionUrl"
+        class="lightbox-panel-link"
+        :href="lightbox.descriptionUrl"
+        target="_blank"
+        rel="noopener"
+      >
+        Open the Commons page
+      </a>
+    </aside>
+
+    <CdxButton
+      v-else
+      weight="quiet"
+      class="lightbox-restore"
+      aria-label="Show details"
+      title="Show details"
+      @click.stop="lightboxDetailsOpen = true"
+    >
+      <CdxIcon :icon="cdxIconExpand" />
+    </CdxButton>
+
+    <button type="button" class="lightbox-close" aria-label="Close" @click.stop="lightbox = null">
+      <CdxIcon :icon="cdxIconClose" />
+    </button>
+  </div>
 </template>
