@@ -101,9 +101,15 @@ const does = [
           <img src="/Village_scene.svg" alt="" width="3840" height="2160" />
         </div>
 
+        <!-- A rating rather than accept/decline: it shows what the tool
+             does without appearing to pass judgement on the illustration
+             standing in for an entry. -->
         <div class="panel-foot" aria-hidden="true">
-          <span class="panel-accept">Accept</span>
-          <span class="panel-decline">Decline</span>
+          <span class="panel-stars">
+            <span v-for="n in 5" :key="n" class="panel-star" :class="{ 'is-on': n <= 4 }">
+              ★
+            </span>
+          </span>
           <span class="spacer"></span>
           <span class="panel-meter"><span :style="{ width: '19%' }"></span></span>
         </div>
@@ -132,7 +138,7 @@ const does = [
     </section>
 
     <section class="tech">
-      <h2 class="tech-title">Technical details</h2>
+      <h2 class="tech-title">Details</h2>
 
       <p class="tech-prose">
         Snap is deployed on
@@ -272,21 +278,19 @@ const does = [
   object-fit: contain;
 }
 
-.panel-accept,
-.panel-decline {
-  padding: var(--spacing-12) var(--spacing-50);
-  border-radius: var(--border-radius-base);
-  font-weight: var(--font-weight-bold);
+.panel-stars {
+  display: inline-flex;
+  gap: 0.125rem;
+  font-size: var(--font-size-medium);
+  line-height: 1;
 }
 
-.panel-accept {
-  background-color: var(--background-color-progressive);
-  color: var(--color-inverted);
+.panel-star {
+  color: var(--border-color-base);
 }
 
-.panel-decline {
-  border: 1px solid var(--border-color-destructive, #d9534f);
-  color: var(--color-destructive, #d9534f);
+.panel-star.is-on {
+  color: #f0a500;
 }
 
 .panel-meter {

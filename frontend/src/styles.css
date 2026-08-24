@@ -34,17 +34,17 @@
 
   /* Interactive colour. Codex resolves buttons, links, focus rings and
      selected states through these. */
-  --color-progressive: var(--snap-navy);
-  --color-progressive--hover: var(--snap-blue);
-  --color-progressive--active: var(--snap-navy-dark);
-  --color-progressive--focus: var(--snap-navy);
-  --background-color-progressive: var(--snap-navy);
-  --background-color-progressive--hover: var(--snap-blue);
-  --background-color-progressive--active: var(--snap-navy-dark);
-  --background-color-progressive-subtle: var(--snap-periwinkle-soft);
-  --border-color-progressive: var(--snap-navy);
+  --color-progressive: var(--snap-bar);
+  --color-progressive--hover: #00669f;
+  --color-progressive--active: #004169;
+  --color-progressive--focus: var(--snap-bar);
+  --background-color-progressive: var(--snap-bar);
+  --background-color-progressive--hover: #00669f;
+  --background-color-progressive--active: #004169;
+  --background-color-progressive-subtle: #e8f2f8;
+  --border-color-progressive: var(--snap-bar);
 
-  --color-link: var(--snap-blue);
+  --color-link: var(--snap-bar);
   --color-link--visited: #5a4a8a;
 
   /* Surfaces: a warm off-white page under white cards, rather than
@@ -56,7 +56,7 @@
   --snap-shadow: rgba(20, 23, 85, 0.06);
   /* The chrome colour: bar and footer, so the page is framed top and
      bottom by the same band. */
-  --snap-bar: #0a3f6e;
+  --snap-bar: #005386;
 }
 
 /* --- Dark mode --------------------------------------------------------
