@@ -144,78 +144,76 @@ async function createCampaign() {
       This project has no lead. An admin must appoint one before campaigns can be created.
     </CdxMessage>
 
-    <div class="grid-2">
-      <div>
-        <h2 class="section-title">Campaigns</h2>
+    <div>
+      <h2 class="section-title">Lead</h2>
+      <p class="muted" style="margin-top: 0; font-size: 0.875rem">
+        The lead creates this project's campaigns and appoints the people who help run them. A
+        person may lead more than one project.
+      </p>
 
-        <div v-if="project.campaigns.length === 0" class="card empty">
-          <p>No campaigns yet.</p>
-        </div>
+      <div class="card">
+        <div v-if="leads.length === 0" class="muted">Nobody appointed.</div>
 
-        <div v-else class="stack">
-          <div
-            v-for="c in project.campaigns"
-            :key="c.id"
-            class="card"
-            style="cursor: pointer"
-            @click="router.push({ name: 'campaign', params: { id: c.id } })"
+        <div v-for="lead in leads" :key="lead.userId" class="row" style="padding: 0.25rem 0">
+          <strong>{{ lead.username }}</strong>
+          <span v-if="lead.appointedBy" class="muted" style="font-size: 0.8125rem">
+            by {{ lead.appointedBy }}
+          </span>
+          <span class="spacer"></span>
+          <CdxButton
+            v-if="canAppointLead"
+            weight="quiet"
+            action="destructive"
+            :disabled="busy"
+            @click="removeLead(lead)"
           >
-            <div class="row wrap">
-              <div>
-                <strong>{{ c.name }}</strong>
-                <p class="muted" style="margin: 0.25rem 0 0; font-size: 0.875rem">
-                  {{ c.sourceSummary || 'No source configured' }} ·
-                  {{ formatNumber(c.imageCount) }} image(s)
-                </p>
-              </div>
-              <span class="spacer"></span>
-              <CdxInfoChip v-if="c.year">{{ c.year }}</CdxInfoChip>
-              <CdxInfoChip v-if="!c.importedAt" status="warning">not imported</CdxInfoChip>
-              <CdxButton
-                weight="quiet"
-                @click.stop="router.push({ name: 'campaign', params: { id: c.id } })"
-              >
-                View rounds <CdxIcon :icon="cdxIconNext" />
-              </CdxButton>
-            </div>
-          </div>
+            Remove
+          </CdxButton>
         </div>
       </div>
 
-      <div>
-        <h2 class="section-title">Lead</h2>
-        <p class="muted" style="margin-top: 0; font-size: 0.875rem">
-          The lead creates this project's campaigns and appoints the people who help run them. A
-          person can lead only one project at a time.
-        </p>
+      <template v-if="project.homepageUrl">
+        <h2 class="section-title" style="margin-top: 1.5rem">Homepage</h2>
+        <a :href="project.homepageUrl" target="_blank" rel="noopener">
+          {{ project.homepageUrl }}
+        </a>
+      </template>
+    </div>
 
-        <div class="card">
-          <div v-if="leads.length === 0" class="muted">Nobody appointed.</div>
+    <div style="margin-top: 1.5rem">
+      <h2 class="section-title">Campaigns</h2>
 
-          <div v-for="lead in leads" :key="lead.userId" class="row" style="padding: 0.25rem 0">
-            <strong>{{ lead.username }}</strong>
-            <span v-if="lead.appointedBy" class="muted" style="font-size: 0.8125rem">
-              by {{ lead.appointedBy }}
-            </span>
+      <div v-if="project.campaigns.length === 0" class="card empty">
+        <p>No campaigns yet.</p>
+      </div>
+
+      <div v-else class="stack">
+        <div
+          v-for="c in project.campaigns"
+          :key="c.id"
+          class="card"
+          style="cursor: pointer"
+          @click="router.push({ name: 'campaign', params: { id: c.id } })"
+        >
+          <div class="row wrap">
+            <div>
+              <strong>{{ c.name }}</strong>
+              <p class="muted" style="margin: 0.25rem 0 0; font-size: 0.875rem">
+                {{ c.sourceSummary || 'No source configured' }} ·
+                {{ formatNumber(c.imageCount) }} image(s)
+              </p>
+            </div>
             <span class="spacer"></span>
+            <CdxInfoChip v-if="c.year">{{ c.year }}</CdxInfoChip>
+            <CdxInfoChip v-if="!c.importedAt" status="warning">not imported</CdxInfoChip>
             <CdxButton
-              v-if="canAppointLead"
               weight="quiet"
-              action="destructive"
-              :disabled="busy"
-              @click="removeLead(lead)"
+              @click.stop="router.push({ name: 'campaign', params: { id: c.id } })"
             >
-              Remove
+              View rounds <CdxIcon :icon="cdxIconNext" />
             </CdxButton>
           </div>
         </div>
-
-        <template v-if="project.homepageUrl">
-          <h2 class="section-title" style="margin-top: 1.5rem">Homepage</h2>
-          <a :href="project.homepageUrl" target="_blank" rel="noopener">
-            {{ project.homepageUrl }}
-          </a>
-        </template>
       </div>
     </div>
 

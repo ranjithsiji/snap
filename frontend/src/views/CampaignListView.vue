@@ -1,7 +1,8 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { CdxButton, CdxInfoChip, CdxMessage, CdxProgressBar } from '@wikimedia/codex'
+import { CdxButton, CdxIcon, CdxInfoChip, CdxMessage, CdxProgressBar } from '@wikimedia/codex'
+import { cdxIconNext } from '@wikimedia/codex-icons'
 import { api } from '@/api'
 import { useSession } from '@/stores/session'
 import { formatNumber } from '@/format'
@@ -77,6 +78,12 @@ onMounted(async () => {
         <CdxInfoChip v-if="campaign.year">{{ campaign.year }}</CdxInfoChip>
         <CdxInfoChip v-if="!campaign.importedAt" status="warning">Not imported</CdxInfoChip>
         <CdxInfoChip v-if="campaign.isArchived">Archived</CdxInfoChip>
+        <CdxButton
+          weight="quiet"
+          @click.stop="router.push({ name: 'campaign', params: { id: campaign.id } })"
+        >
+          View rounds <CdxIcon :icon="cdxIconNext" />
+        </CdxButton>
       </div>
     </div>
   </div>
