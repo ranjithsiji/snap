@@ -51,6 +51,11 @@ const fetchingNext = ref(false)
 // as its local state.
 const pickedImageId = ref(null)
 
+// The juror's existing score when the image on the stage is one they have
+// already judged, otherwise null. Only ever set by openInSingleView; the
+// queue excludes images this juror has voted on.
+const alreadyJudged = ref(null)
+
 // "single" walks one image at a time; "gallery" is the fast grid pass.
 const mode = ref('single')
 const showFullSize = ref(false)
@@ -146,6 +151,13 @@ function openInSingleView(image) {
   exhausted.value = false
   mode.value = 'single'
   pickedImageId.value = image.id
+
+  // The gallery's selected/rejected/all tabs list images this juror has
+  // already judged, and picking one used to open it as though a verdict
+  // were still due: the vote buttons were live, and casting one hit the
+  // "already voted" error. The queue itself never hands these out, so the
+  // stage only ever sees one via this path.
+  alreadyJudged.value = image.score ?? null
 }
 
 /**
@@ -169,6 +181,9 @@ async function loadQueue() {
 
     images.value = data.images
     exhausted.value = data.exhausted
+    // Everything the queue returns is awaiting this juror's verdict, so
+    // any banner left over from a gallery pick no longer applies.
+    alreadyJudged.value = null
   } finally {
     fetchingNext.value = false
   }
@@ -249,7 +264,10 @@ async function toggleFavorite() {
 }
 
 function onKey(event) {
+  // alreadyJudged covers the same case the buttons disable for: a shortcut
+  // must not reach past an inert button and hit the "already voted" error.
   if (busy.value || isRanking.value || mode.value !== 'single' || !current.value) return
+  if (alreadyJudged.value !== null) return
   if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') return
 
   if (event.key === 'ArrowRight' || event.key === 's') {
@@ -413,20 +431,48 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         </div>
 
         <div class="stage-image" :class="[`backdrop-${backdrop}`, { 'is-full': showFullSize }]">
+          <!-- Falls back the way the gallery tile does. A juror reaching
+               this stage from a filtered gallery tab can be handed an
+               image the queue never presented, and an absent thumbUrl
+               left the stage showing a broken frame while the very same
+               image rendered fine in the grid. -->
           <img
-            :src="showFullSize ? current.fileUrl : current.thumbUrl"
+            :src="
+              showFullSize
+                ? (current.fileUrl ?? current.thumbUrl)
+                : (current.thumbUrl ?? current.fileUrl)
+            "
             :alt="current.name ?? 'Image awaiting judgement'"
           />
         </div>
+
+        <!-- Reached only by picking an image from a gallery tab that
+             lists judged work; says why the buttons below are inert. -->
+        <CdxMessage v-if="alreadyJudged !== null" type="notice" class="stage-judged">
+          <template v-if="isYesNo">
+            You already {{ alreadyJudged >= 1 ? 'accepted' : 'declined' }} this image.
+          </template>
+          <template v-else> You already rated this image {{ alreadyJudged }}. </template>
+          Return to the gallery to change your vote.
+        </CdxMessage>
 
         <!-- The vote sits directly under the photograph rather than in
              the sidebar: it is the one thing done on every image. -->
         <div class="stage-actions">
           <div v-if="isYesNo" class="row">
-            <CdxButton action="progressive" weight="primary" :disabled="busy" @click="vote(1)">
+            <CdxButton
+              action="progressive"
+              weight="primary"
+              :disabled="busy || alreadyJudged !== null"
+              @click="vote(1)"
+            >
               <CdxIcon :icon="cdxIconCheck" /> Accept
             </CdxButton>
-            <CdxButton action="destructive" :disabled="busy" @click="vote(0)">
+            <CdxButton
+              action="destructive"
+              :disabled="busy || alreadyJudged !== null"
+              @click="vote(0)"
+            >
               <CdxIcon :icon="cdxIconClose" /> Decline
             </CdxButton>
           </div>
@@ -438,7 +484,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
               type="button"
               class="star"
               :aria-label="`Rate ${star}`"
-              :disabled="busy"
+              :disabled="busy || alreadyJudged !== null"
               @click="vote(star)"
             >
               ★
@@ -447,7 +493,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 
           <span class="spacer"></span>
 
-          <CdxButton weight="quiet" :disabled="busy" @click="skip">
+          <CdxButton weight="quiet" :disabled="busy || alreadyJudged !== null" @click="skip">
             <CdxIcon :icon="cdxIconNext" /> Skip
           </CdxButton>
         </div>

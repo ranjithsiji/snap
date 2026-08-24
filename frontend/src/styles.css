@@ -857,6 +857,14 @@ body {
   background-size: 6px 6px;
 }
 
+/* Sits between the photograph and the inert vote buttons, where a juror
+   looking for why they cannot vote will already be looking. */
+.stage-judged {
+  margin: 0;
+  padding: var(--spacing-50) var(--spacing-75);
+  border-top: 1px solid var(--border-color-subtle);
+}
+
 /* The vote, directly under the photograph: it is the one thing done to
    every image, so it is not in the sidebar. */
 .stage-actions {
