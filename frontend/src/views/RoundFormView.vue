@@ -166,7 +166,16 @@ async function submit() {
 
           <CdxField>
             <template #label>Vote method</template>
-            <CdxSelect v-model:selected="form.votingMethod" :menu-items="votingMethods" />
+            <!-- A meeting round is never chosen here — it is only ever
+                 created through "Open jury meeting" on its source round —
+                 and Meeting was never one of this dropdown's options, so
+                 selecting it showed blank instead of the round's actual
+                 method. Changing it away from Meeting would also break
+                 the discussion/consensus flow the round depends on, so
+                 it is shown fixed rather than added as a fourth pickable
+                 option. -->
+            <CdxTextInput v-if="form.votingMethod === 'meeting'" model-value="Final jury meeting" disabled />
+            <CdxSelect v-else v-model:selected="form.votingMethod" :menu-items="votingMethods" />
           </CdxField>
         </div>
 

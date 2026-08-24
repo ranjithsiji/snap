@@ -166,13 +166,20 @@ async function reimport() {
               <!-- Judging only when there is judging to do; View round
                    always, since the round's own page is where everything
                    else about it — including activating it — happens. -->
+              <!-- A meeting round has its own screen — voting sends it
+                   through the star-rating single-image flow, which its
+                   method never uses. -->
               <CdxButton
                 v-if="round.state === 'active'"
                 weight="quiet"
                 action="progressive"
-                @click.stop="router.push({ name: 'vote', params: { id: round.id } })"
+                @click.stop="router.push({
+                  name: round.votingMethod === 'meeting' ? 'meeting' : 'vote',
+                  params: { id: round.id },
+                })"
               >
-                <CdxIcon :icon="cdxIconImageGallery" /> Judge
+                <CdxIcon :icon="cdxIconImageGallery" />
+                {{ round.votingMethod === 'meeting' ? 'Join meeting' : 'Judge' }}
               </CdxButton>
               <CdxButton
                 weight="quiet"

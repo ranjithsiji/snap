@@ -713,6 +713,20 @@ class RoundActions
                 throw DomainException::badRequest('Unknown voting method.');
             }
 
+            // A meeting round's method is fixed at creation and never
+            // offered as a choice — changing it away would break the
+            // discussion/consensus flow the round exists for, and
+            // changing another round's method to Meeting would bypass
+            // createMeeting()'s setup (jurors carried over, results
+            // attached) entirely.
+            if ($method !== $round->getVotingMethod()
+                && ($method === VotingMethod::Meeting || $round->getVotingMethod() === VotingMethod::Meeting)
+            ) {
+                throw DomainException::badRequest(
+                    'A jury meeting\'s voting method cannot be changed.'
+                );
+            }
+
             $round->setVotingMethod($method);
         }
 

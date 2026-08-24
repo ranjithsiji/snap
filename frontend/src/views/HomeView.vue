@@ -106,13 +106,25 @@ onMounted(async () => {
           {{ formatDeadline(round.votingDeadline) }}
         </span>
         <span class="spacer"></span>
+        <!-- A jury meeting has its own screen — a shared discussion and
+             ranking, not the independent per-juror voting flow. Sending
+             a meeting round through 'vote' landed a juror in the
+             star-rating single-image view, which the round's method
+             never actually uses. -->
         <CdxButton
           v-if="round.acceptsVotes"
           action="progressive"
           weight="primary"
-          @click="router.push({ name: 'vote', params: { id: round.id } })"
+          @click="router.push({
+            name: round.votingMethod === 'meeting' ? 'meeting' : 'vote',
+            params: { id: round.id },
+          })"
         >
-          {{ round.myProgress?.voted ? 'Continue judging' : 'Start judging' }}
+          {{
+            round.votingMethod === 'meeting'
+              ? 'Join meeting'
+              : round.myProgress?.voted ? 'Continue judging' : 'Start judging'
+          }}
         </CdxButton>
         <span v-else class="muted">Not open for voting</span>
       </div>
