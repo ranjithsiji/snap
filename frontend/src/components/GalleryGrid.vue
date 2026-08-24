@@ -332,14 +332,51 @@ async function toggleFavorite(image) {
 
       <template v-if="lightbox.score !== undefined">
         <h3 class="vote-section">Your vote</h3>
-        <p class="muted">
-          <template v-if="lightbox.score === null || lightbox.score === undefined">
-            Not yet judged
-          </template>
-          <template v-else-if="isYesNo">
-            {{ lightbox.score === 1 ? 'Accepted' : 'Declined' }}
-          </template>
-          <template v-else>{{ lightbox.score }} star(s)</template>
+
+        <!-- Voting from the lightbox too, not just naming the current
+             state: a juror inspecting the full image with its details is
+             in exactly the position to decide, and sending them back to
+             the grid to do it is an extra step for no reason. -->
+        <div v-if="isYesNo" class="row lightbox-vote">
+          <button
+            type="button"
+            class="tile-action tile-yes lightbox-vote-btn"
+            :class="{ on: lightbox.score === 1 }"
+            aria-label="Accept"
+            :disabled="lightbox.busy"
+            @click="vote(lightbox, 1)"
+          >
+            <CdxIcon :icon="cdxIconCheck" />
+          </button>
+          <button
+            type="button"
+            class="tile-action tile-no lightbox-vote-btn"
+            :class="{ on: lightbox.score === 0 }"
+            aria-label="Decline"
+            :disabled="lightbox.busy"
+            @click="vote(lightbox, 0)"
+          >
+            <CdxIcon :icon="cdxIconClose" />
+          </button>
+        </div>
+
+        <div v-else class="row lightbox-vote">
+          <button
+            v-for="star in stars"
+            :key="star"
+            type="button"
+            class="tile-action tile-star lightbox-vote-btn"
+            :class="{ on: lightbox.score >= star }"
+            :aria-label="`Rate ${star}`"
+            :disabled="lightbox.busy"
+            @click="vote(lightbox, star)"
+          >
+            ★
+          </button>
+        </div>
+
+        <p v-if="lightbox.score === null || lightbox.score === undefined" class="muted">
+          Not yet judged
         </p>
       </template>
 

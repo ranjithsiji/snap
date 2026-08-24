@@ -870,6 +870,24 @@ body {
   transform: scale(1.08);
 }
 
+/* In the lightbox panel, vote buttons sit in the document flow rather
+   than absolutely positioned over a photograph, so the tile styling is
+   overridden back to a normal inline button. */
+.lightbox-vote {
+  gap: var(--spacing-75);
+  margin-bottom: var(--spacing-50);
+}
+
+.lightbox-vote-btn {
+  position: static;
+  background-color: var(--background-color-interactive-subtle);
+  color: var(--color-base);
+}
+
+.lightbox-vote-btn:hover:not(:disabled) {
+  background-color: var(--background-color-interactive-subtle--hover);
+}
+
 .tile-action:disabled {
   opacity: 0.5;
   cursor: progress;
@@ -1015,11 +1033,16 @@ body {
 
 /* Shown only once the panel is minimised, so there is still a way back
    to it without closing and reopening the lightbox. */
+/* Clear of the app's own topbar, which sits at the same top-right corner
+   and made a quiet button read as invisible against it — same dark tone,
+   same position, no border of its own to separate the two. */
 .lightbox-restore {
   position: absolute;
-  top: var(--spacing-150);
+  top: calc(3.5rem + var(--spacing-150));
   right: var(--spacing-150);
   background-color: var(--background-color-base);
+  border: var(--border-base);
+  box-shadow: 0 2px 6px rgb(0 0 0 / 35%);
 }
 
 @media (max-width: 60rem) {
@@ -1378,4 +1401,25 @@ body {
 
 .row-blocked {
   opacity: 0.55;
+}
+
+.role-scope-link {
+  display: block;
+  margin-top: var(--spacing-25);
+  font-size: var(--font-size-x-small);
+}
+
+.role-grant-list {
+  margin: 0 0 var(--spacing-100);
+  padding: 0;
+  list-style: none;
+}
+
+.role-grant-list li {
+  padding: var(--spacing-50) 0;
+  border-bottom: var(--border-base);
+}
+
+.role-grant-list li:last-child {
+  border-bottom: none;
 }
