@@ -192,7 +192,23 @@ class WikimediaOAuthService
         if ($status >= 400) {
             $message = $decoded['message'] ?? $decoded['error_description'] ?? $decoded['error'] ?? 'unknown error';
 
-            throw new DomainException("Wikimedia rejected the request: $message", 502);
+            // Wikimedia answers a redirect_uri mismatch with a bare
+            // "unknown error", which says nothing about the one setting
+            // that actually has to be right. The URI is not a secret —
+            // the browser has already seen it in the authorize link — so
+            // naming it here turns an opaque 502 into something fixable.
+            $this->logger->error('OAuth request rejected', [
+                'status' => $status,
+                'message' => $message,
+                'redirect_uri' => $this->settings['redirect_uri'] ?? null,
+            ]);
+
+            throw new DomainException(sprintf(
+                'Wikimedia rejected the request: %s. The redirect URI sent was "%s" — it must match '
+                . 'the callback URL registered on the OAuth consumer exactly.',
+                $message,
+                (string) ($this->settings['redirect_uri'] ?? ''),
+            ), 502);
         }
 
         return $decoded;

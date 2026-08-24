@@ -94,13 +94,25 @@ return [
     // Wikimedia OAuth 2.0 (authorization code flow). Register an owner-only
     // or public consumer at:
     // https://meta.wikimedia.org/wiki/Special:OAuthConsumerRegistration/propose/oauth2
+    //
+    // These endpoints stay on meta.wikimedia.org even though the tool works
+    // with Commons: Wikimedia OAuth is central, so consumers are registered
+    // and tokens issued on Meta, against the unified account that is the
+    // same identity on Commons. Pointing them at commons.wikimedia.org
+    // instead would break a working setup — Commons' own API, which does
+    // live there, is configured separately below.
     'oauth' => [
         'client_id' => $env('OAUTH_CLIENT_ID'),
         'client_secret' => $env('OAUTH_CLIENT_SECRET'),
         'authorize_url' => $env('OAUTH_AUTHORIZE_URL', 'https://meta.wikimedia.org/w/rest.php/oauth2/authorize'),
         'token_url' => $env('OAUTH_TOKEN_URL', 'https://meta.wikimedia.org/w/rest.php/oauth2/access_token'),
         'profile_url' => $env('OAUTH_PROFILE_URL', 'https://meta.wikimedia.org/w/rest.php/oauth2/resource/profile'),
-        'redirect_uri' => $env('OAUTH_REDIRECT_URI', ($env('APP_URL', 'http://localhost:8080') ?? '') . '/api/auth/callback'),
+        // Must equal the callback URL registered on the consumer, character
+        // for character: it is sent both when the user is redirected out and
+        // again when the code is exchanged, and Wikimedia compares the two.
+        // Defaults to /wikicallback to match what .env.example documents —
+        // /api/auth/callback is routed too, but only one can be registered.
+        'redirect_uri' => $env('OAUTH_REDIRECT_URI', ($env('APP_URL', 'http://localhost:8080') ?? '') . '/wikicallback'),
         'timeout' => (int) ($env('OAUTH_TIMEOUT', '15') ?? 15),
     ],
 
