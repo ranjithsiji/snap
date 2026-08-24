@@ -13,6 +13,19 @@ const password = ref('')
 const error = ref(null)
 const busy = ref(false)
 
+/**
+ * A full page load, not a router navigation: the OAuth handshake starts
+ * on the server and ends back here with a session cookie set.
+ *
+ * Called from a real function rather than inline in the template —
+ * template expressions resolve bare identifiers against the component's
+ * render context, not the global scope, so neither `location` nor
+ * `window` is reachable from there.
+ */
+function loginWithWikimedia() {
+  window.location.href = '/api/auth/wikimedia'
+}
+
 async function submit() {
   error.value = null
   busy.value = true
@@ -41,7 +54,7 @@ async function submit() {
         action="progressive"
         weight="primary"
         style="width: 100%; margin-top: 1.5rem"
-        @click="window.location.href = '/api/auth/wikimedia'"
+        @click="loginWithWikimedia"
       >
         Log in with Wikimedia
       </CdxButton>

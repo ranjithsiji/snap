@@ -109,6 +109,18 @@ function openInSingleView(image) {
   pickedImageId.value = image.id
 }
 
+/**
+ * Opens a Commons URL in a new tab.
+ *
+ * Kept as a function rather than calling window.open inline in the
+ * template: template expressions resolve bare identifiers against the
+ * component's render context, not the global scope, so `window` is
+ * undefined there and the click throws instead of opening anything.
+ */
+function openExternal(url) {
+  window.open(url, '_blank', 'noopener')
+}
+
 async function loadQueue() {
   fetchingNext.value = true
 
@@ -332,7 +344,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
             weight="quiet"
             class="stage-tool"
             title="Open the Commons page"
-            @click="window.open(current.descriptionUrl, '_blank', 'noopener')"
+            @click="openExternal(current.descriptionUrl)"
           >
             <CdxIcon :icon="cdxIconLink" />
           </CdxButton>
@@ -345,7 +357,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
             weight="quiet"
             class="stage-tool"
             title="Open the original file"
-            @click="window.open(current.fileUrl, '_blank', 'noopener')"
+            @click="openExternal(current.fileUrl)"
           >
             <CdxIcon :icon="cdxIconDownload" />
           </CdxButton>
