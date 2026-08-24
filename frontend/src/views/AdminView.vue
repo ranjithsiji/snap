@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { cdxIconAdd, cdxIconTrash } from '@wikimedia/codex-icons'
+import { cdxIconAdd, cdxIconEdit, cdxIconTrash } from '@wikimedia/codex-icons'
 import {
   CdxButton,
   CdxIcon,
@@ -13,6 +13,7 @@ import {
   CdxSelect,
   CdxTab,
   CdxTabs,
+  CdxTextArea,
   CdxTextInput,
 } from '@wikimedia/codex'
 import DataTable from '@/components/DataTable.vue'
@@ -163,6 +164,70 @@ async function loadStructure() {
  */
 const pendingDelete = ref(null)
 
+/** Inline project editing, since projects have no form view of their own. */
+const projectEdit = ref(null)
+
+function openProjectEdit(project) {
+  projectEdit.value = {
+    id: project.id,
+    name: project.name,
+    description: project.description ?? '',
+  }
+}
+
+async function saveProject() {
+  const { id, name, description } = projectEdit.value
+
+  busy.value = true
+  error.value = null
+  notice.value = null
+
+  try {
+    await api.patch(`/projects/${id}`, { name, description })
+    projectEdit.value = null
+    notice.value = `Saved project “${name}”.`
+    await loadStructure()
+  } catch (e) {
+    error.value = e.message
+  } finally {
+    busy.value = false
+  }
+}
+
+async function setCampaignClosed(campaign, closed) {
+  busy.value = true
+  error.value = null
+  notice.value = null
+
+  try {
+    await api.patch(`/campaigns/${campaign.id}`, { isClosed: closed })
+    notice.value = `${closed ? 'Closed' : 'Reopened'} “${campaign.name}”.`
+    await loadStructure()
+  } catch (e) {
+    error.value = e.message
+  } finally {
+    busy.value = false
+  }
+}
+
+async function setRoundState(round, state) {
+  busy.value = true
+  error.value = null
+  notice.value = null
+
+  try {
+    await api.post(`/rounds/${round.id}/state/${state}`)
+    notice.value = `“${round.name}” is now ${state}.`
+    await loadStructure()
+  } catch (e) {
+    // Carries the server's reason — an unimported round, or one with no
+    // jurors — rather than a generic failure.
+    error.value = e.message
+  } finally {
+    busy.value = false
+  }
+}
+
 const deleteWarning = computed(() => {
   const kind = pendingDelete.value?.kind
 
@@ -174,12 +239,24 @@ const deleteWarning = computed(() => {
     return 'This also deletes the campaign’s rounds, the images imported for it, and every vote, ranking and comment the jury recorded.'
   }
 
+  // A juror's seat keeps their username as text, so their votes and the
+  // tallies stand. Worth saying plainly, because deleting an account that
+  // has judged sounds far more destructive than it is.
+  if (kind === 'user') {
+    return 'Their votes and rankings are kept, still under their username, and the round tallies do not change. Activity log entries keep their text. Block the account instead if you only want to prevent sign-in.'
+  }
+
   return 'This also deletes the images imported into the round and every vote, ranking and comment the jury recorded against them.'
 })
 
 async function performDelete() {
   const { kind, item } = pendingDelete.value
-  const paths = { project: 'projects', campaign: 'campaigns', round: 'rounds' }
+  const paths = {
+    project: 'projects',
+    campaign: 'campaigns',
+    round: 'rounds',
+    user: 'admin/users',
+  }
 
   busy.value = true
   error.value = null
@@ -188,11 +265,15 @@ async function performDelete() {
   try {
     await api.delete(`/${paths[kind]}/${item.id}`)
     pendingDelete.value = null
-    notice.value = `Deleted ${kind} “${item.name}”.`
+    notice.value = `Deleted ${kind} “${item.name ?? item.username}”.`
 
-    // Everything below the deleted row has gone too, so all three lists
-    // are reloaded rather than only the one on screen.
-    await Promise.all([loadStructure(), loadOverview()])
+    // Everything below the deleted row has gone too, so all lists are
+    // reloaded rather than only the one on screen.
+    await Promise.all([
+      loadStructure(),
+      loadOverview(),
+      kind === 'user' ? loadUsers() : Promise.resolve(),
+    ])
   } catch (e) {
     error.value = e.message
   } finally {
@@ -391,7 +472,12 @@ async function createUser() {
                 />
               </td>
               <td>
-                <CdxInfoChip>{{ user.isWikimediaLinked ? 'Wikimedia' : 'local' }}</CdxInfoChip>
+                <!-- Three states, not two: an account that is neither linked
+                     to Wikimedia nor holds a password cannot sign in at all,
+                     and calling it "local" hid that. -->
+                <CdxInfoChip v-if="user.isWikimediaLinked">Wikimedia</CdxInfoChip>
+                <CdxInfoChip v-else-if="user.hasLocalPassword">local</CdxInfoChip>
+                <CdxInfoChip v-else status="warning">no sign-in</CdxInfoChip>
               </td>
               <td>{{ user.jurorSeats }}</td>
               <td class="muted">
@@ -404,13 +490,16 @@ async function createUser() {
               </td>
               <td>
                 <div class="row" style="gap: 0.25rem; justify-content: flex-end">
+                  <!-- Offered whether or not the account already has a
+                       password: the endpoint sets one either way, and
+                       gating on hasLocalPassword left an account that
+                       never had one with no way to be given one. -->
                   <CdxButton
-                    v-if="user.hasLocalPassword"
                     weight="quiet"
                     :disabled="busy"
                     @click="resetPassword(user)"
                   >
-                    Reset password
+                    {{ user.hasLocalPassword ? 'Reset password' : 'Set password' }}
                   </CdxButton>
                   <CdxButton
                     weight="quiet"
@@ -419,6 +508,16 @@ async function createUser() {
                     @click="setActive(user, !user.isActive)"
                   >
                     {{ user.isActive ? 'Block' : 'Unblock' }}
+                  </CdxButton>
+                  <!-- Deleting your own account is refused by the server
+                       too; disabling it here keeps the row honest. -->
+                  <CdxButton
+                    weight="quiet"
+                    action="destructive"
+                    :disabled="busy || user.id === session.user.id"
+                    @click="pendingDelete = { kind: 'user', item: user }"
+                  >
+                    <CdxIcon :icon="cdxIconTrash" /> Delete
                   </CdxButton>
                 </div>
               </td>
@@ -448,14 +547,22 @@ async function createUser() {
           {{ row.leadNames || '—' }}
         </template>
         <template #cell-actions="{ row }">
-          <CdxButton
-            action="destructive"
-            weight="quiet"
-            :disabled="busy"
-            @click="pendingDelete = { kind: 'project', item: row }"
-          >
-            <CdxIcon :icon="cdxIconTrash" /> Delete
-          </CdxButton>
+          <div class="row" style="gap: 0.25rem; justify-content: flex-end">
+            <!-- PATCH /projects/{id} has always existed with nothing in the
+                 interface calling it, so a project's name and description
+                 could not be corrected once created. -->
+            <CdxButton weight="quiet" :disabled="busy" @click="openProjectEdit(row)">
+              <CdxIcon :icon="cdxIconEdit" /> Edit
+            </CdxButton>
+            <CdxButton
+              action="destructive"
+              weight="quiet"
+              :disabled="busy"
+              @click="pendingDelete = { kind: 'project', item: row }"
+            >
+              <CdxIcon :icon="cdxIconTrash" /> Delete
+            </CdxButton>
+          </div>
         </template>
       </DataTable>
     </template>
@@ -477,14 +584,29 @@ async function createUser() {
           {{ formatNumber(row.imageCount ?? 0) }}
         </template>
         <template #cell-actions="{ row }">
-          <CdxButton
-            action="destructive"
-            weight="quiet"
-            :disabled="busy"
-            @click="pendingDelete = { kind: 'campaign', item: row }"
-          >
-            <CdxIcon :icon="cdxIconTrash" /> Delete
-          </CdxButton>
+          <div class="row" style="gap: 0.25rem; justify-content: flex-end">
+            <CdxButton
+              weight="quiet"
+              :disabled="busy"
+              @click="router.push({ name: 'campaign-edit', params: { id: row.id } })"
+            >
+              <CdxIcon :icon="cdxIconEdit" /> Edit
+            </CdxButton>
+            <!-- Closing stops a campaign accepting new work without
+                 deleting anything, which is what most "finished" campaigns
+                 actually want. -->
+            <CdxButton weight="quiet" :disabled="busy" @click="setCampaignClosed(row, !row.isClosed)">
+              {{ row.isClosed ? 'Reopen' : 'Close' }}
+            </CdxButton>
+            <CdxButton
+              action="destructive"
+              weight="quiet"
+              :disabled="busy"
+              @click="pendingDelete = { kind: 'campaign', item: row }"
+            >
+              <CdxIcon :icon="cdxIconTrash" /> Delete
+            </CdxButton>
+          </div>
         </template>
       </DataTable>
     </template>
@@ -508,14 +630,43 @@ async function createUser() {
           </CdxInfoChip>
         </template>
         <template #cell-actions="{ row }">
-          <CdxButton
-            action="destructive"
-            weight="quiet"
-            :disabled="busy"
-            @click="pendingDelete = { kind: 'round', item: row }"
-          >
-            <CdxIcon :icon="cdxIconTrash" /> Delete
-          </CdxButton>
+          <div class="row" style="gap: 0.25rem; justify-content: flex-end">
+            <CdxButton
+              weight="quiet"
+              :disabled="busy"
+              @click="router.push({ name: 'round-edit', params: { id: row.id } })"
+            >
+              <CdxIcon :icon="cdxIconEdit" /> Edit
+            </CdxButton>
+            <!-- Activation can fail for reasons this table cannot see — no
+                 images, no jurors — so the server's message is surfaced
+                 rather than the button being hidden on a guess. -->
+            <CdxButton
+              v-if="row.state === 'draft' || row.state === 'paused'"
+              weight="quiet"
+              action="progressive"
+              :disabled="busy"
+              @click="setRoundState(row, 'active')"
+            >
+              Activate
+            </CdxButton>
+            <CdxButton
+              v-else-if="row.state === 'active'"
+              weight="quiet"
+              :disabled="busy"
+              @click="setRoundState(row, 'paused')"
+            >
+              Pause
+            </CdxButton>
+            <CdxButton
+              action="destructive"
+              weight="quiet"
+              :disabled="busy"
+              @click="pendingDelete = { kind: 'round', item: row }"
+            >
+              <CdxIcon :icon="cdxIconTrash" /> Delete
+            </CdxButton>
+          </div>
         </template>
       </DataTable>
     </template>
@@ -599,6 +750,30 @@ async function createUser() {
     </CdxMessage>
   </CdxDialog>
 
+  <CdxDialog
+    :open="projectEdit !== null"
+    title="Edit project"
+    :primary-action="{ label: 'Save', actionType: 'progressive', disabled: busy }"
+    :default-action="{ label: 'Cancel' }"
+    @primary="saveProject"
+    @default="projectEdit = null"
+    @update:open="(open) => { if (!open) projectEdit = null }"
+  >
+    <!-- Guarded: the dialog body still renders while closed, and
+         projectEdit is null then. -->
+    <template v-if="projectEdit">
+      <CdxField>
+        <template #label>Name</template>
+        <CdxTextInput v-model="projectEdit.name" />
+      </CdxField>
+
+      <CdxField>
+        <template #label>Description</template>
+        <CdxTextArea v-model="projectEdit.description" rows="3" />
+      </CdxField>
+    </template>
+  </CdxDialog>
+
   <!-- Deletion cascades, so the dialog names what else goes rather than
        asking a generic "are you sure". -->
   <CdxDialog
@@ -615,7 +790,8 @@ async function createUser() {
     @update:open="(open) => { if (!open) pendingDelete = null }"
   >
     <p style="margin-top: 0">
-      <strong>{{ pendingDelete?.item?.name }}</strong>
+      <!-- Users are named by username; everything else by name. -->
+      <strong>{{ pendingDelete?.item?.name ?? pendingDelete?.item?.username }}</strong>
     </p>
 
     <CdxMessage type="warning" inline>

@@ -129,6 +129,7 @@ return function (App $app): void {
             $admin->patch('/admin/users/{id}/role', [UserActions::class, 'setRole']);
             $admin->patch('/admin/users/{id}/active', [UserActions::class, 'setActive']);
             $admin->post('/admin/users/{id}/password', [UserActions::class, 'resetPassword']);
+            $admin->delete('/admin/users/{id}', [UserActions::class, 'delete']);
         })->add(RequireRole::admin($access));
     });
 

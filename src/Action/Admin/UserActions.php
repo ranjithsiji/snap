@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace JuryTool\Action\Admin;
 
 use Doctrine\ORM\EntityManagerInterface;
+use JuryTool\Domain\Entity\OpinionEndorsement;
 use JuryTool\Domain\Entity\RoundJuror;
 use JuryTool\Domain\Entity\User;
 use JuryTool\Domain\Enum\UserRole;
@@ -238,6 +239,63 @@ class UserActions
         return Json::write($response, [
             'user' => Presenter::user($user) + ['isActive' => $user->isActive()],
         ]);
+    }
+
+    /**
+     * Removes an account.
+     *
+     * Votes survive: a juror's seat holds their username as plain text and
+     * the account link is nullable, so deleting the account leaves the
+     * votes, their author's name and the tallies intact. Activity log
+     * entries and meeting comments keep their text and lose only the link.
+     *
+     * Endorsements do not survive — they cascade — so an account carrying
+     * any is refused rather than quietly altering a decided meeting.
+     * Blocking is the way to retire such a juror.
+     */
+    public function delete(Request $request, Response $response, array $args): Response
+    {
+        $actor = $this->actor($request);
+        $user = $this->find($args['id']);
+
+        if ($actor?->getId() === $user->getId()) {
+            throw DomainException::badRequest('You cannot delete your own account.');
+        }
+
+        if ($user->getRole() === UserRole::Admin) {
+            $this->assertNotLastAdministrator($actor, $user);
+        }
+
+        $endorsements = (int) $this->em->createQuery(
+            'SELECT COUNT(e.id) FROM ' . OpinionEndorsement::class . ' e WHERE e.juror = :user'
+        )->setParameter('user', $user)->getSingleScalarResult();
+
+        if ($endorsements > 0) {
+            throw DomainException::badRequest(sprintf(
+                'This user has endorsed %d meeting opinion(s), which would be removed with the '
+                . 'account and would change a recorded outcome. Block the account instead.',
+                $endorsements,
+            ));
+        }
+
+        $username = $user->getUsername();
+        $id = $user->getId();
+
+        // Recorded before the delete, so the entry can still name the actor
+        // and does not reference a row that is about to disappear.
+        $this->log->record(
+            $actor,
+            'user.delete',
+            sprintf('Deleted the account %s', $username),
+            'User',
+            $id,
+            request: $request,
+        );
+
+        $this->em->remove($user);
+        $this->em->flush();
+
+        return Json::write($response, ['ok' => true, 'username' => $username]);
     }
 
     /**
