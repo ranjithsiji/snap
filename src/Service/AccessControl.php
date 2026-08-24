@@ -53,22 +53,41 @@ class AccessControl
         return false;
     }
 
-    /** The project this user leads, if any. A person leads at most one. */
-    public function ledProject(User $user): ?Project
+    /**
+     * Every project this user leads.
+     *
+     * A person can lead more than one — a Wikimedia chapter organizing
+     * both Wiki Loves Earth and Wiki Loves Monuments in the same year is
+     * commonly the same small group of people running both.
+     *
+     * @return list<Project>
+     */
+    public function ledProjects(User $user): array
     {
+        $projects = [];
+
         foreach ($this->assignmentsFor($user) as $assignment) {
-            if ($assignment->getRole() === UserRole::Lead) {
-                return $assignment->getProject();
+            if ($assignment->getRole() === UserRole::Lead && $assignment->getProject() !== null) {
+                $projects[] = $assignment->getProject();
             }
         }
 
-        return null;
+        return $projects;
     }
 
     public function leads(User $user, Project $project): bool
     {
-        return $this->isAdmin($user)
-            || $this->ledProject($user)?->getId() === $project->getId();
+        if ($this->isAdmin($user)) {
+            return true;
+        }
+
+        foreach ($this->ledProjects($user) as $led) {
+            if ($led->getId() === $project->getId()) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -134,6 +153,10 @@ class AccessControl
 
         foreach ($this->assignmentsFor($user) as $assignment) {
             $history[] = [
+                // Needed to revoke a specific grant: this method's only
+                // caller until now displayed the history but never acted
+                // on it, so a payload with no id went unnoticed.
+                'id' => $assignment->getId(),
                 'role' => $assignment->getRole()->value,
                 'roleLabel' => $assignment->getRole()->label(),
                 'scope' => $assignment->scopeLabel(),
@@ -194,28 +217,23 @@ class AccessControl
     }
 
     /**
-     * Appoints a lead, enforcing that nobody leads two projects.
-     *
-     * The database has a unique constraint on user_id for lead rows, so
-     * this check is a courtesy that produces a helpful message rather than
-     * a constraint violation.
+     * Appoints a lead. A person may lead more than one project — the
+     * unique constraint on RoleAssignment is (user, role, project), so
+     * only the exact same grant twice is actually blocked; leading a
+     * second, different project has never been a database-level problem.
      */
     public function appointLead(User $user, Project $project, ?User $grantedBy = null): RoleAssignment
     {
-        $existing = $this->ledProject($user);
+        $duplicate = $this->em->getRepository(RoleAssignment::class)->findOneBy([
+            'user' => $user,
+            'role' => UserRole::Lead,
+            'project' => $project,
+        ]);
 
-        if ($existing !== null) {
-            if ($existing->getId() === $project->getId()) {
-                throw DomainException::badRequest(
-                    sprintf('%s already leads this project.', $user->getUsername())
-                );
-            }
-
-            throw DomainException::badRequest(sprintf(
-                '%s already leads %s. A person can lead only one project — remove them there first.',
-                $user->getUsername(),
-                $existing->getName(),
-            ));
+        if ($duplicate !== null) {
+            throw DomainException::badRequest(
+                sprintf('%s already leads this project.', $user->getUsername())
+            );
         }
 
         $assignment = RoleAssignment::lead($user, $project, $grantedBy);
