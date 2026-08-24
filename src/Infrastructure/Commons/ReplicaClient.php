@@ -135,14 +135,10 @@ class ReplicaClient
             throw new CategoryTooLargeException($category, $total, $max);
         }
 
-        // cl_to directly, rather than joining through linktarget: the join
-        // was added on the assumption that cl_to is being retired, but
-        // nothing here actually depended on that being true, and cl_to
-        // still carries the category name on this replica. Querying it
-        // directly is what mist does against the same database, and an
-        // import that took over three minutes through the join finishes
-        // in a fraction of that on cl_to — the join was the cost, not
-        // something the replica required.
+        // Commons has normalised categorylinks: cl_to no longer exists on
+        // the real Toolforge replica (confirmed live — a direct cl_to
+        // comparison fails with "Unknown column 'cl.cl_to'"). cl_target_id
+        // joined to linktarget is what the current schema actually has.
         //
         // Paging is by cl_from rather than OFFSET, because MariaDB re-scans
         // and discards every skipped row for a large OFFSET — the last
@@ -159,10 +155,12 @@ class ReplicaClient
                 img.img_timestamp    AS uploaded_at,
                 actor.actor_name     AS uploader
             FROM categorylinks cl
+            INNER JOIN linktarget lt ON lt.lt_id = cl.cl_target_id
             INNER JOIN page p        ON p.page_id = cl.cl_from
             INNER JOIN image img     ON img.img_name = p.page_title
             LEFT JOIN actor          ON actor.actor_id = img.img_actor
-            WHERE cl.cl_to = :category
+            WHERE lt.lt_title = :category
+              AND lt.lt_namespace = 14
               AND p.page_namespace = 6
               AND cl.cl_from > :after
             ORDER BY cl.cl_from ASC
@@ -291,8 +289,10 @@ class ReplicaClient
         return (int) $this->connection()->executeQuery(
             'SELECT COUNT(*)
              FROM categorylinks cl
+             INNER JOIN linktarget lt ON lt.lt_id = cl.cl_target_id
              INNER JOIN page p ON p.page_id = cl.cl_from
-             WHERE cl.cl_to = :category
+             WHERE lt.lt_title = :category
+               AND lt.lt_namespace = 14
                AND p.page_namespace = 6',
             ['category' => $category],
         )->fetchOne();
