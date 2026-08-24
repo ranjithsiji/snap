@@ -1,15 +1,33 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { CdxButton, CdxInfoChip, CdxMessage, CdxProgressBar } from '@wikimedia/codex'
 import { api } from '@/api'
 import { useSession } from '@/stores/session'
-import { formatDeadline } from '@/format'
+import { formatDeadline, formatNumber } from '@/format'
 
 const session = useSession()
 const router = useRouter()
 
 const rounds = ref([])
+
+/** What is actually waiting, so the greeting says something useful. */
+const waiting = computed(() => {
+  if (rounds.value.length === 0) {
+    return 'Rounds you have been invited to judge'
+  }
+
+  const left = rounds.value.reduce((sum, r) => sum + (r.myProgress?.remaining ?? 0), 0)
+
+  if (left === 0) {
+    return 'You are up to date on every round.'
+  }
+
+  const open = rounds.value.filter((r) => r.acceptsVotes).length
+
+  return `${formatNumber(left)} image${left === 1 ? '' : 's'} waiting across ` +
+    `${open} open round${open === 1 ? '' : 's'}.`
+})
 const loading = ref(true)
 const error = ref(null)
 
@@ -28,8 +46,10 @@ onMounted(async () => {
 <template>
   <div class="page-head">
     <div>
-      <h1 class="page-title">My rounds</h1>
-      <p class="page-subtitle">Rounds you have been invited to judge</p>
+      <h1 class="page-title">
+        Welcome back, {{ session.user?.username }}
+      </h1>
+      <p class="page-subtitle">{{ waiting }}</p>
     </div>
     <CdxButton v-if="session.isOrganizer" @click="router.push({ name: 'campaigns' })">
       Manage campaigns
@@ -51,37 +71,51 @@ onMounted(async () => {
     </CdxButton>
   </div>
 
-  <div v-else class="stack">
-    <div v-for="round in rounds" :key="round.id" class="card">
-      <div class="row wrap">
-        <div>
-          <h2 class="section-title">{{ round.name }}</h2>
-          <p class="muted" style="margin: 0; font-size: 0.875rem">
-            {{ round.campaignName }} · {{ round.votingMethodLabel }} ·
-            {{ formatDeadline(round.votingDeadline) }}
-          </p>
-        </div>
-
-        <span class="spacer"></span>
-
+  <!-- Cards rather than rows: each carries its own progress, and a juror
+       scanning this page is choosing which round to work on. -->
+  <div v-else class="round-cards">
+    <div v-for="round in rounds" :key="round.id" class="card round-card">
+      <div class="row wrap round-card-head">
         <CdxInfoChip :status="round.state === 'active' ? 'success' : 'notice'">
           {{ round.state }}
         </CdxInfoChip>
+        <span class="spacer"></span>
+        <span class="muted round-card-method">{{ round.votingMethodLabel }}</span>
+      </div>
 
+      <h2 class="round-card-title">{{ round.name }}</h2>
+      <p class="muted round-card-campaign">{{ round.campaignName }}</p>
+
+      <template v-if="round.myProgress">
+        <div class="meter round-card-meter">
+          <span :style="{ width: `${round.myProgress.percentComplete}%` }"></span>
+        </div>
+        <p class="round-card-progress">
+          <strong>{{ round.myProgress.percentComplete }}%</strong>
+          <span class="muted">
+            — {{ formatNumber(round.myProgress.remaining) }} of
+            {{ formatNumber(round.myProgress.expected) }} left to judge
+          </span>
+        </p>
+      </template>
+
+      <p v-if="round.details" class="muted round-card-details">{{ round.details }}</p>
+
+      <div class="row round-card-foot">
+        <span class="muted round-card-deadline">
+          {{ formatDeadline(round.votingDeadline) }}
+        </span>
+        <span class="spacer"></span>
         <CdxButton
           v-if="round.acceptsVotes"
           action="progressive"
           weight="primary"
           @click="router.push({ name: 'vote', params: { id: round.id } })"
         >
-          Start judging
+          {{ round.myProgress?.voted ? 'Continue judging' : 'Start judging' }}
         </CdxButton>
         <span v-else class="muted">Not open for voting</span>
       </div>
-
-      <p v-if="round.details" class="muted" style="margin: 0.75rem 0 0; font-size: 0.875rem">
-        {{ round.details }}
-      </p>
     </div>
   </div>
 </template>

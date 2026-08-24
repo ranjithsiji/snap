@@ -162,6 +162,59 @@ async function submitDerivation() {
     <CdxMessage v-if="error" type="error">{{ error }}</CdxMessage>
     <CdxMessage v-if="notice" type="success">{{ notice }}</CdxMessage>
 
+    <!-- How far the round has got, above its configuration: it is the
+         question anyone opening this page came to answer. -->
+    <div v-if="stats" class="round-summary">
+      <div class="card progress-card">
+        <h2 class="section-title" style="margin-top: 0">Round progress</h2>
+
+        <div class="progress-figure">
+          <span class="progress-number">{{ stats.percentComplete }}%</span>
+          <span class="muted">judged</span>
+        </div>
+
+        <div class="meter progress-meter">
+          <span :style="{ width: `${stats.percentComplete}%` }"></span>
+        </div>
+
+        <div class="row progress-legend">
+          <span>{{ formatNumber(stats.completedTasks) }} votes cast</span>
+          <span class="spacer"></span>
+          <span>{{ formatNumber(stats.openTasks) }} remaining</span>
+        </div>
+      </div>
+
+      <div class="card stat-cards">
+        <div class="stat-cell">
+          <span class="stat-label">Images</span>
+          <span class="stat-value">{{ formatNumber(stats.qualifiedFiles) }}</span>
+          <span v-if="stats.disqualifiedFiles" class="muted stat-note">
+            {{ formatNumber(stats.disqualifiedFiles) }} disqualified
+          </span>
+        </div>
+
+        <div class="stat-cell">
+          <span class="stat-label">Jurors</span>
+          <span class="stat-value">{{ formatNumber(stats.jurors) }}</span>
+          <span class="muted stat-note">{{ stats.quorum }} per image</span>
+        </div>
+
+        <div class="stat-cell">
+          <span class="stat-label">At quorum</span>
+          <span class="stat-value">{{ formatNumber(stats.imagesAtQuorum) }}</span>
+          <span class="muted stat-note">
+            {{ formatNumber(stats.imagesRemaining) }} short
+          </span>
+        </div>
+
+        <div class="stat-cell">
+          <span class="stat-label">Uploaders</span>
+          <span class="stat-value">{{ formatNumber(stats.uploaders) }}</span>
+          <span class="muted stat-note">{{ (stats.fileTypes ?? []).join(', ') }}</span>
+        </div>
+      </div>
+    </div>
+
     <div class="card">
       <div class="grid-2">
         <!-- Left: configuration and jury progress -->
@@ -224,20 +277,15 @@ async function submitDerivation() {
 
         <!-- Right: file information and settings -->
         <div>
-          <h2 class="section-title">Round file information</h2>
+          <!-- Only what the summary above does not already say. Repeating
+               the same eight figures twice on one page made neither
+               reading authoritative. -->
+          <h2 class="section-title">Judging tasks</h2>
 
           <dl class="stat-list">
-            <div><dt>Files</dt><dd>{{ formatNumber(stats.files) }}</dd></div>
-            <div><dt>Qualified files</dt><dd>{{ formatNumber(stats.qualifiedFiles) }}</dd></div>
-            <div><dt>Disqualified files</dt><dd>{{ formatNumber(stats.disqualifiedFiles) }}</dd></div>
-            <div><dt>Uploaders</dt><dd>{{ formatNumber(stats.uploaders) }}</dd></div>
-            <div><dt>Tasks</dt><dd>{{ formatNumber(stats.tasks) }}</dd></div>
-            <div><dt>Open tasks</dt><dd>{{ formatNumber(stats.openTasks) }}</dd></div>
-            <div><dt>Percentage complete</dt><dd>{{ stats.percentComplete }}%</dd></div>
-            <div>
-              <dt>Images at quorum</dt>
-              <dd>{{ formatNumber(stats.imagesAtQuorum) }}</dd>
-            </div>
+            <div><dt>Total tasks</dt><dd>{{ formatNumber(stats.tasks) }}</dd></div>
+            <div><dt>Completed</dt><dd>{{ formatNumber(stats.completedTasks) }}</dd></div>
+            <div><dt>Open</dt><dd>{{ formatNumber(stats.openTasks) }}</dd></div>
           </dl>
 
           <details class="disclosure" style="margin-top: 1rem">

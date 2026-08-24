@@ -60,7 +60,25 @@ class JuryActions
                 continue;
             }
 
-            $rounds[(int) $round->getId()] = Presenter::round($round);
+            $data = Presenter::round($round);
+
+            // This juror's own progress in this round. Without it the
+            // dashboard can say only that a round exists, not whether
+            // there is work waiting in it — which is the reason to look.
+            foreach ($this->statistics->jurorProgress($round) as $progress) {
+                if ((int) $progress['id'] === (int) $entry->getId()) {
+                    $data['myProgress'] = [
+                        'voted' => $progress['votesCast'],
+                        'expected' => $progress['expected'],
+                        'remaining' => $progress['remaining'],
+                        'percentComplete' => $progress['percentComplete'],
+                    ];
+
+                    break;
+                }
+            }
+
+            $rounds[(int) $round->getId()] = $data;
         }
 
         krsort($rounds);
