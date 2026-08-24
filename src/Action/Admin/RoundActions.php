@@ -725,6 +725,7 @@ class RoundActions
         $settings->setShowFilename(Json::bool($fs, 'showFilename', $settings->showsFilename()));
         $settings->setShowLink(Json::bool($fs, 'showLink', $settings->showsLink()));
         $settings->setShowResolution(Json::bool($fs, 'showResolution', $settings->showsResolution()));
+        $settings->setShowUploader(Json::bool($fs, 'showUploader', $settings->showsUploader()));
 
         if (array_key_exists('minResolutionPixels', $fs)) {
             $settings->setMinResolutionPixels(

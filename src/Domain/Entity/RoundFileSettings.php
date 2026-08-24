@@ -72,6 +72,14 @@ class RoundFileSettings
     #[ORM\Column(name: 'show_resolution', type: 'boolean')]
     private bool $showResolution = false;
 
+    /**
+     * Show who uploaded the file. Off by default: withholding this is what
+     * keeps judging blind, so a coordinator has to choose to give it up
+     * rather than discover afterwards that it was on.
+     */
+    #[ORM\Column(name: 'show_uploader', type: 'boolean')]
+    private bool $showUploader = false;
+
     public function disqualifiesByResolution(): bool
     {
         return $this->disqualifyByResolution;
@@ -194,6 +202,16 @@ class RoundFileSettings
         $this->showResolution = $value;
     }
 
+    public function showsUploader(): bool
+    {
+        return $this->showUploader;
+    }
+
+    public function setShowUploader(bool $value): void
+    {
+        $this->showUploader = $value;
+    }
+
     /**
      * Campaign participant roles whose uploads this round rejects.
      *
@@ -231,6 +249,7 @@ class RoundFileSettings
         $this->showFilename = $other->showFilename;
         $this->showLink = $other->showLink;
         $this->showResolution = $other->showResolution;
+        $this->showUploader = $other->showUploader;
     }
 
     /** True when no filter is active, letting the caller skip the whole pass. */

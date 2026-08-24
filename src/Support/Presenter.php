@@ -142,6 +142,7 @@ final class Presenter
                 'showFilename' => $settings->showsFilename(),
                 'showLink' => $settings->showsLink(),
                 'showResolution' => $settings->showsResolution(),
+                'showUploader' => $settings->showsUploader(),
             ],
         ];
     }
@@ -175,9 +176,10 @@ final class Presenter
     /**
      * An image as a juror sees it while voting.
      *
-     * Filename, file link and resolution are withheld unless the round
-     * enables them, and the uploader is never exposed — that is what keeps
-     * the judging blind.
+     * Filename, file link, resolution and the uploader are all withheld
+     * unless the round enables them — that is what keeps the judging
+     * blind by default, while still letting a coordinator who wants
+     * open judging turn any of it on.
      *
      * @return array<string, mixed>
      */
@@ -213,6 +215,10 @@ final class Presenter
             $data['width'] = $image->getWidth();
             $data['height'] = $image->getHeight();
             $data['megapixels'] = round($image->getPixelCount() / 1_000_000, 1);
+        }
+
+        if ($settings->showsUploader()) {
+            $data['uploader'] = $image->getUploader();
         }
 
         return $data;

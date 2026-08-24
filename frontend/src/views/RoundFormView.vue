@@ -60,6 +60,7 @@ const form = ref({
     showFilename: false,
     showLink: false,
     showResolution: false,
+    showUploader: false,
   },
 })
 
@@ -258,6 +259,13 @@ async function submit() {
           <CdxCheckbox v-model="form.fileSettings.showFilename">Show filename</CdxCheckbox>
           <CdxCheckbox v-model="form.fileSettings.showLink">Show link</CdxCheckbox>
           <CdxCheckbox v-model="form.fileSettings.showResolution">Show resolution</CdxCheckbox>
+          <CdxCheckbox v-model="form.fileSettings.showUploader">
+            Show uploader
+            <template #description>
+              Off by default — this is what keeps judging blind. Turn it on only
+              if this round is not meant to be judged blind.
+            </template>
+          </CdxCheckbox>
         </CdxField>
 
         <CdxField v-if="form.fileSettings.disqualifyByResolution">
