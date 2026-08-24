@@ -69,11 +69,23 @@ async function runImport() {
     await load()
 
     const added = data.import?.added ?? 0
+    const updated = data.import?.updated ?? 0
     const seen = data.import?.processed ?? 0
 
-    notice.value = added === seen
-      ? `Imported ${formatNumber(added)} image(s).`
-      : `Imported ${formatNumber(added)} image(s) from ${formatNumber(seen)} read.`
+    // "0 added" reads as a failed import unless it is clear the round
+    // already had every file — which is the normal outcome of importing
+    // twice, not an error, and worth saying plainly rather than leaving
+    // a coordinator to wonder why nothing happened.
+    if (added === seen) {
+      notice.value = `Imported ${formatNumber(added)} image(s).`
+    } else if (added === 0 && updated === 0 && seen > 0) {
+      notice.value =
+        `${formatNumber(seen)} image(s) read — all were already in the pool, nothing new to add.`
+    } else {
+      notice.value =
+        `Imported ${formatNumber(added)} image(s) from ${formatNumber(seen)} read` +
+        (updated > 0 ? ` (${formatNumber(updated)} updated).` : '.')
+    }
 
     if ((data.warnings ?? []).length > 0) {
       notice.value += ` ${data.warnings.join(' ')}`
