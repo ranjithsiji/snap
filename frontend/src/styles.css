@@ -1033,11 +1033,13 @@ body {
    together over a photograph, and telling tick from cross by colour
    alone — before clicking — is what actually prevents a mis-click. */
 .tile-yes {
-  color: var(--color-success, #14866d);
+  color: #fff;
+  background-color: var(--color-success, #14866d);
 }
 
 .tile-no {
-  color: var(--color-error, #d33);
+  color: #fff;
+  background-color: var(--color-error, #d33);
 }
 
 .tile-yes.on {
