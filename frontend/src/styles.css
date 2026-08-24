@@ -974,7 +974,7 @@ body {
 
 .tile-votes {
   display: flex;
-  gap: var(--spacing-100);
+  gap: var(--spacing-150);
 }
 
 .tile-action {
