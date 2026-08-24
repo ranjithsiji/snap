@@ -974,7 +974,7 @@ body {
 
 .tile-votes {
   display: flex;
-  gap: var(--spacing-25);
+  gap: var(--spacing-100);
 }
 
 .tile-action {
@@ -1029,12 +1029,25 @@ body {
   color: var(--color-warning);
 }
 
+/* Coloured by default, not only once picked: the two buttons sit close
+   together over a photograph, and telling tick from cross by colour
+   alone — before clicking — is what actually prevents a mis-click. */
+.tile-yes {
+  color: var(--color-success, #14866d);
+}
+
+.tile-no {
+  color: var(--color-error, #d33);
+}
+
 .tile-yes.on {
   background-color: var(--background-color-success-subtle);
+  color: var(--color-success, #14866d);
 }
 
 .tile-no.on {
   background-color: var(--background-color-error-subtle);
+  color: var(--color-error, #d33);
 }
 
 .tile-zoom,
