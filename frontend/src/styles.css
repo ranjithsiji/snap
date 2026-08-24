@@ -367,6 +367,47 @@ body {
   font-weight: var(--font-weight-bold);
 }
 
+.round-type-icon {
+  flex-shrink: 0;
+  color: var(--color-subtle);
+  margin-top: 0.125rem;
+}
+
+/* A single rail down the left, threading through every round card, so
+   the campaign's rounds read as stages of one pipeline rather than
+   unrelated entries in a list. */
+.round-waterfall {
+  position: relative;
+  display: grid;
+  gap: var(--spacing-100);
+  padding-left: 1.5rem;
+}
+
+.round-waterfall::before {
+  content: '';
+  position: absolute;
+  top: 0.75rem;
+  bottom: 0.75rem;
+  left: 0.3125rem;
+  width: 2px;
+  background-color: var(--border-color-progressive, #6485d1);
+}
+
+.round-waterfall-item {
+  position: relative;
+}
+
+.round-waterfall-dot {
+  position: absolute;
+  top: 1.1rem;
+  left: -1.5rem;
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 50%;
+  background-color: var(--background-color-base);
+  border: 2px solid var(--border-color-progressive, #6485d1);
+}
+
 .grid-2 {
   display: grid;
   grid-template-columns: 1fr 1fr;

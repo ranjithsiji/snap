@@ -18,6 +18,18 @@ const view = ref('gallery')
 const isRanking = computed(() => round.value?.votingMethod === 'rank')
 const maxStars = computed(() => round.value?.maxRating ?? 5)
 
+// Paged at 25, same as the meeting screens' galleries — a round's results
+// can run to hundreds of images, and rendering all of them into a grid at
+// once is the same thing that made those screens unusable before paging.
+const PAGE_SIZE = 25
+const page = ref(0)
+const pageCount = computed(() => Math.max(1, Math.ceil(results.value.length / PAGE_SIZE)))
+const pagedResults = computed(() => {
+  const start = page.value * PAGE_SIZE
+
+  return results.value.slice(start, start + PAGE_SIZE)
+})
+
 async function load() {
   loading.value = true
 
@@ -27,6 +39,7 @@ async function load() {
     )
     round.value = data.round
     results.value = data.results
+    page.value = 0
   } catch (e) {
     error.value = e.message
   } finally {
@@ -93,35 +106,49 @@ function download(format) {
     </div>
 
     <!-- Gallery: ranked thumbnails with their scores underneath -->
-    <div v-else-if="view === 'gallery'" class="results-gallery">
-      <figure v-for="row in results" :key="row.roundImageId" class="result-tile">
-        <a :href="row.descriptionUrl" target="_blank" rel="noopener">
-          <img :src="row.thumbUrl" :alt="row.title" loading="lazy" />
-        </a>
+    <template v-else-if="view === 'gallery'">
+      <div class="gallery-toolbar">
+        <span class="muted">{{ results.length }} image(s)</span>
+        <span class="spacer"></span>
+        <CdxButton weight="quiet" :disabled="page === 0" @click="page--">
+          «
+        </CdxButton>
+        <span class="muted">Page {{ page + 1 }} of {{ pageCount }}</span>
+        <CdxButton weight="quiet" :disabled="page >= pageCount - 1" @click="page++">
+          »
+        </CdxButton>
+      </div>
 
-        <figcaption>
-          <span class="result-rank">{{ row.position }}.</span>
+      <div class="results-gallery">
+        <figure v-for="row in pagedResults" :key="row.roundImageId" class="result-tile">
+          <a :href="row.descriptionUrl" target="_blank" rel="noopener">
+            <img :src="row.thumbUrl" :alt="row.title" loading="lazy" />
+          </a>
 
-          <span v-if="!isRanking" class="result-stars" :aria-label="`Score ${row.averageScore}`">
-            <span
-              v-for="star in maxStars"
-              :key="star"
-              class="result-star"
-              :class="{ on: starsFor(row.averageScore) >= star - 0.5 }"
-            >
-              ★
+          <figcaption>
+            <span class="result-rank">{{ row.position }}.</span>
+
+            <span v-if="!isRanking" class="result-stars" :aria-label="`Score ${row.averageScore}`">
+              <span
+                v-for="star in maxStars"
+                :key="star"
+                class="result-star"
+                :class="{ on: starsFor(row.averageScore) >= star - 0.5 }"
+              >
+                ★
+              </span>
             </span>
-          </span>
 
-          <span class="result-score">
-            {{ row.averageScore ?? '—' }}
-            <span class="muted">({{ row.totalScore }} / {{ row.voteCount }})</span>
-          </span>
-        </figcaption>
+            <span class="result-score">
+              {{ row.averageScore ?? '—' }}
+              <span class="muted">({{ row.totalScore }} / {{ row.voteCount }})</span>
+            </span>
+          </figcaption>
 
-        <p v-if="row.isDisqualified" class="result-dq">{{ row.disqualificationReason }}</p>
-      </figure>
-    </div>
+          <p v-if="row.isDisqualified" class="result-dq">{{ row.disqualificationReason }}</p>
+        </figure>
+      </div>
+    </template>
 
     <!-- Table: the same data, sortable at a glance and easy to scan -->
     <div v-else class="card table-scroll">

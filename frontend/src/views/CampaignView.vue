@@ -9,7 +9,15 @@ import {
   CdxMessage,
   CdxProgressBar,
 } from '@wikimedia/codex'
-import { cdxIconEdit, cdxIconImageGallery, cdxIconNext } from '@wikimedia/codex-icons'
+import {
+  cdxIconCheckAll,
+  cdxIconEdit,
+  cdxIconImageGallery,
+  cdxIconNext,
+  cdxIconSortVertical,
+  cdxIconStar,
+  cdxIconUserGroup,
+} from '@wikimedia/codex-icons'
 import CommonsChipInput from '@/components/CommonsChipInput.vue'
 import { api } from '@/api'
 import { useSession } from '@/stores/session'
@@ -36,6 +44,15 @@ const roles = [
 ]
 
 const chips = ref({ organizer: [], coordinator: [], maintainer: [] })
+
+// One icon per voting method, so the round type is legible at a glance
+// instead of only in the smaller label text underneath the name.
+const votingMethodIcons = {
+  yesno: cdxIconCheckAll,
+  rating: cdxIconStar,
+  rank: cdxIconSortVertical,
+  meeting: cdxIconUserGroup,
+}
 
 async function load() {
   loading.value = true
@@ -144,20 +161,33 @@ async function reimport() {
           <p>No rounds yet.</p>
         </div>
 
-        <div v-else class="stack">
+        <!-- A single rail runs down the left through every round, rather
+             than separate arrows between each pair — a round that
+             continues from the one before it is a stage in one pipeline,
+             not a series of unrelated list items. -->
+        <div v-else class="round-waterfall">
           <div
             v-for="round in campaign.rounds"
             :key="round.id"
-            class="card"
+            class="round-waterfall-item card"
             style="cursor: pointer"
             @click="router.push({ name: 'round', params: { id: round.id } })"
           >
+            <span class="round-waterfall-dot"></span>
+
             <div class="row wrap">
-              <div>
-                <strong>{{ round.name }}</strong>
-                <p class="muted" style="margin: 0.25rem 0 0; font-size: 0.875rem">
-                  {{ round.votingMethodLabel }} · {{ formatDeadline(round.votingDeadline) }}
-                </p>
+              <div class="row" style="gap: 0.5rem">
+                <CdxIcon
+                  v-if="votingMethodIcons[round.votingMethod]"
+                  :icon="votingMethodIcons[round.votingMethod]"
+                  class="round-type-icon"
+                />
+                <div>
+                  <strong>{{ round.name }}</strong>
+                  <p class="muted" style="margin: 0.25rem 0 0; font-size: 0.875rem">
+                    {{ round.votingMethodLabel }} · {{ formatDeadline(round.votingDeadline) }}
+                  </p>
+                </div>
               </div>
               <span class="spacer"></span>
               <CdxInfoChip :status="round.state === 'active' ? 'success' : 'notice'">
