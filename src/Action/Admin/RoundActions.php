@@ -270,12 +270,19 @@ class RoundActions
     public function show(Request $request, Response $response, array $args): Response
     {
         $round = $this->find($args['id']);
+        $actor = $this->actor($request);
 
         return Json::write($response, [
             'round' => Presenter::round($round),
             'statistics' => $this->statistics->roundSummary($round),
             'jurors' => $this->statistics->jurorProgress($round),
             'sources' => $this->sources($round),
+            // Lets the round screen show Delete only to someone who could
+            // actually use it. Without this, organizers had no delete
+            // affordance on their own round at all — it existed only in
+            // the admin panel, which they may not have access to.
+            'canManage' => $actor !== null
+                && ($this->access->isAdmin($actor) || $this->access->organizes($actor, $round->getCampaign())),
         ]);
     }
 
@@ -611,10 +618,28 @@ class RoundActions
     public function delete(Request $request, Response $response, array $args): Response
     {
         $round = $this->find($args['id']);
+        $actor = $this->actor($request);
+
+        // Every other mutating action here checks this; delete did not,
+        // so any signed-in juror could remove a round outright through the
+        // API even without a delete button anywhere in their view of it.
+        if ($actor !== null) {
+            $this->access->requireOrganizer($actor, $round->getCampaign());
+        }
+
+        // An active round has jurors voting on it right now; removing it
+        // outright would throw away work in progress without warning.
+        // Pausing first is the deliberate step that says the round is
+        // really meant to stop.
+        if ($round->getState() === RoundState::Active) {
+            throw DomainException::badRequest(
+                'This round is active. Pause it before deleting it.'
+            );
+        }
 
         $name = $round->getName();
         $id = $round->getId();
-        $actorId = $this->actor($request)?->getId();
+        $actorId = $actor?->getId();
 
         // Counted with a query rather than through $round->getImages().
         // Reading that collection loads the rows into the entity manager,

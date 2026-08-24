@@ -11,7 +11,7 @@ import {
   CdxProgressBar,
   CdxTextInput,
 } from '@wikimedia/codex'
-import { cdxIconDownload } from '@wikimedia/codex-icons'
+import { cdxIconDownload, cdxIconTrash } from '@wikimedia/codex-icons'
 import CommonsLookup from '@/components/CommonsLookup.vue'
 import { api } from '@/api'
 import { formatDeadline, formatNumber, formatPixels } from '@/format'
@@ -123,6 +123,9 @@ async function submitReplacement() {
 
 const settings = computed(() => round.value?.fileSettings ?? {})
 
+const canManage = ref(false)
+const deleteOpen = ref(false)
+
 async function load() {
   loading.value = true
 
@@ -131,10 +134,26 @@ async function load() {
     round.value = data.round
     stats.value = data.statistics
     jurors.value = data.jurors
+    canManage.value = data.canManage
   } catch (e) {
     error.value = e.message
   } finally {
     loading.value = false
+  }
+}
+
+async function deleteRound() {
+  busy.value = true
+  error.value = null
+
+  try {
+    await api.delete(`/rounds/${props.id}`)
+    router.push({ name: 'campaign', params: { id: round.value.campaignId } })
+  } catch (e) {
+    error.value = e.message
+    deleteOpen.value = false
+  } finally {
+    busy.value = false
   }
 }
 
@@ -219,9 +238,25 @@ async function submitDerivation() {
           </template>
         </p>
       </div>
-      <CdxButton @click="router.push({ name: 'round-edit', params: { id: round.id } })">
-        Edit round
-      </CdxButton>
+      <div class="row" style="gap: 0.5rem">
+        <CdxButton @click="router.push({ name: 'round-edit', params: { id: round.id } })">
+          Edit round
+        </CdxButton>
+        <!-- Only for someone who organizes this round's campaign or leads
+             its project — the same check the server enforces, so this
+             never offers an action the API would refuse. Active rounds
+             have jurors voting right now; pause first is the deliberate
+             step that says the round is really meant to stop. -->
+        <CdxButton
+          v-if="canManage"
+          action="destructive"
+          :disabled="round.state === 'active'"
+          :title="round.state === 'active' ? 'Pause the round before deleting it.' : undefined"
+          @click="deleteOpen = true"
+        >
+          <CdxIcon :icon="cdxIconTrash" /> Delete round
+        </CdxButton>
+      </div>
     </div>
 
     <CdxMessage v-if="error" type="error">{{ error }}</CdxMessage>
@@ -573,6 +608,21 @@ async function submitDerivation() {
           placeholder="Start typing a username…"
         />
       </CdxField>
+    </CdxDialog>
+
+    <CdxDialog
+      v-model:open="deleteOpen"
+      title="Delete round?"
+      :primary-action="{ label: 'Delete permanently', actionType: 'destructive', disabled: busy }"
+      :default-action="{ label: 'Cancel' }"
+      @primary="deleteRound"
+      @default="deleteOpen = false"
+    >
+      <p style="margin-top: 0"><strong>{{ round.name }}</strong></p>
+      <CdxMessage type="warning" inline>
+        This also deletes the images imported into the round and every vote, ranking and comment
+        the jury recorded against them. This cannot be undone.
+      </CdxMessage>
     </CdxDialog>
   </template>
 </template>
