@@ -90,10 +90,20 @@ function applyRank(changedIndex, rawValue) {
 
   const positions = new Map(others.map((item, index) => [item.image.id, index + 1]))
 
-  entries.value = entries.value.map((item) => ({
-    ...item,
-    rank: String(positions.get(item.image.id)),
-  }))
+  // Mutated in place, and only where the rank actually changed, rather
+  // than replacing all 200 entries with new objects on every keystroke.
+  // A fresh array forced every tile to re-render on every digit typed
+  // anywhere in the grid — with two hundred controlled number inputs
+  // that showed up as visibly glitching, half-rendered fields while
+  // typing. Assigning only the ranks that moved keeps Vue's reactivity
+  // from touching the tiles that did not.
+  for (const item of entries.value) {
+    const next = String(positions.get(item.image.id))
+
+    if (item.rank !== next) {
+      item.rank = next
+    }
+  }
 }
 
 /** Field status: duplicates are an error, a blank rank a pending warning. */
