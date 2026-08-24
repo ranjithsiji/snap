@@ -64,4 +64,27 @@ enum VotingMethod: string
     {
         return $this !== self::RankOrder;
     }
+
+    /**
+     * The usual next step for a round derived from one judged this way.
+     *
+     * A contest narrows as it goes: Yes/No is the pre-jury pass that cuts
+     * a large pool down to a shortlist, Rating and Ranking each narrow it
+     * further and ask more of the jury per image, and the meeting is
+     * where the panel settles the result together. This is only ever a
+     * starting suggestion for a newly derived round — the coordinator can
+     * still pick a different method for it before activating.
+     */
+    public function nextInFunnel(): self
+    {
+        return match ($this) {
+            self::YesNo => self::Rating,
+            self::Rating => self::RankOrder,
+            // Ranking's own next step is the meeting, but that is opened
+            // through its own dedicated action rather than derive() — a
+            // derived round defaults to repeating ranking on a smaller set.
+            self::RankOrder => self::RankOrder,
+            self::Meeting => self::Meeting,
+        };
+    }
 }

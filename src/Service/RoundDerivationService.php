@@ -234,8 +234,12 @@ class RoundDerivationService
         $round->setDerivationCriteria($criteria->describe($source->getVotingMethod(), $source->getMaxRating()));
 
         // Carry the source round's configuration forward as a starting
-        // point; the coordinator edits it before activating.
-        $round->setVotingMethod($source->getVotingMethod());
+        // point; the coordinator edits it before activating. The voting
+        // method defaults to the next step in the usual funnel — Yes/No
+        // then Rating then Ranking — rather than repeating the source's
+        // own method, since a derived round is normally meant to narrow
+        // the field further, not re-run the same pass on fewer images.
+        $round->setVotingMethod($source->getVotingMethod()->nextInFunnel());
         $round->setMaxRating($source->getMaxRating());
         $round->setQuorum($source->getQuorum());
         $round->setShowOwnStatistics($source->showsOwnStatistics());
