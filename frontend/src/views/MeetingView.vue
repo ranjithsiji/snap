@@ -181,6 +181,9 @@ function onMatrixUpdated(updated) {
           Final jury meeting · {{ round.campaignName }}
           <template v-if="round.derivedFromRoundName"> · from {{ round.derivedFromRoundName }}</template>
         </p>
+        <p v-if="round.jurorUsernames?.length" class="muted" style="margin: 0.25rem 0 0">
+          Panel: {{ round.jurorUsernames.join(', ') }}
+        </p>
       </div>
 
       <div class="row">
@@ -240,6 +243,12 @@ function onMatrixUpdated(updated) {
             <span v-if="image.drift !== 0" class="muted" style="font-size: 0.8125rem">
               moved {{ Math.abs(image.drift) }} {{ image.drift > 0 ? 'up' : 'down' }}
             </span>
+            <CdxButton
+              weight="quiet"
+              @click="router.push({ name: 'meeting-image', params: { id, imageId: image.imageId } })"
+            >
+              View & discuss
+            </CdxButton>
           </div>
 
           <div class="proposal-row">

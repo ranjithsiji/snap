@@ -108,6 +108,17 @@ const routes = [
     props: true,
   },
   {
+    // A full-screen, one-image-at-a-time view of the meeting: a film
+    // strip to move between images, and every juror's remarks on
+    // whichever one is open. MeetingView's own tabs cover the shared
+    // ranking and the general discussion; this is for looking hard at
+    // one photograph and what the panel said about it.
+    path: '/meetings/:id/images/:imageId',
+    name: 'meeting-image',
+    component: () => import('@/views/MeetingImageView.vue'),
+    props: true,
+  },
+  {
     path: '/vote/:id',
     name: 'vote',
     component: () => import('@/views/VoteView.vue'),
