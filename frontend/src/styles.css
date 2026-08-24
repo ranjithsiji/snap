@@ -454,6 +454,16 @@ body {
   font-size: var(--font-size-small);
 }
 
+/* --- Round actions ------------------------------------------------------
+   A distinct panel above everything else, rather than buried below the
+   file-settings details at the bottom of the configuration card — the
+   round's lifecycle is what someone visiting this page is most likely
+   here to act on. */
+.round-actions-panel {
+  margin-bottom: var(--spacing-150);
+  background-color: var(--background-color-interactive-subtle);
+}
+
 /* --- Round summary ---------------------------------------------------
    Progress first and largest, because "how far along is this?" is what
    brings anyone to a round page. */

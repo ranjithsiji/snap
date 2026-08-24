@@ -215,7 +215,10 @@ async function submitDerivation() {
     })
 
     deriveOpen.value = false
-    router.push({ name: 'round', params: { id: data.round.id } })
+    // The campaign page, not the new round itself: it lists every round in
+    // the campaign, which is the useful view right after adding one — the
+    // organizer can see it took its place alongside the others.
+    router.push({ name: 'campaign', params: { id: data.round.campaignId } })
   } catch (e) {
     error.value = e.message
   } finally {
@@ -255,6 +258,57 @@ async function submitDerivation() {
           @click="deleteOpen = true"
         >
           <CdxIcon :icon="cdxIconTrash" /> Delete round
+        </CdxButton>
+      </div>
+    </div>
+
+    <!-- The round's lifecycle in one place at the top of the page, rather
+         than buried below the file-settings details at the bottom of the
+         card: these are the actions someone visiting this page is most
+         likely here to take, and they used to require scrolling past
+         everything else to reach. -->
+    <div class="card round-actions-panel">
+      <div class="row row-end wrap">
+        <!-- Disabled rather than hidden while the round is empty: the
+             server refuses this anyway, and offering a button that only
+             returns an error is worse than showing why it is not ready. -->
+        <CdxButton
+          v-if="round.state === 'draft' || round.state === 'paused'"
+          action="progressive"
+          :disabled="busy || needsImport"
+          :title="needsImport ? 'Import the round\'s images first.' : undefined"
+          @click="transition('active')"
+        >
+          Activate
+        </CdxButton>
+
+        <CdxButton v-if="round.state === 'active'" :disabled="busy" @click="transition('paused')">
+          Pause
+        </CdxButton>
+
+        <CdxButton
+          v-if="round.state === 'active' || round.state === 'paused'"
+          action="progressive"
+          :disabled="busy"
+          @click="transition('finalized')"
+        >
+          Finalize round
+        </CdxButton>
+
+        <CdxButton @click="router.push({ name: 'round-results', params: { id: round.id } })">
+          View results
+        </CdxButton>
+
+        <CdxButton @click="download('csv')">Download results</CdxButton>
+        <CdxButton @click="download('txt')">Download entries</CdxButton>
+
+        <CdxButton
+          v-if="round.state === 'finalized'"
+          action="progressive"
+          weight="primary"
+          @click="deriveOpen = true"
+        >
+          Create next round
         </CdxButton>
       </div>
     </div>
@@ -497,49 +551,6 @@ async function submitDerivation() {
         </div>
       </div>
 
-      <div class="row row-end wrap" style="margin-top: 1.5rem">
-        <!-- Disabled rather than hidden while the round is empty: the
-             server refuses this anyway, and offering a button that only
-             returns an error is worse than showing why it is not ready. -->
-        <CdxButton
-          v-if="round.state === 'draft' || round.state === 'paused'"
-          action="progressive"
-          :disabled="busy || needsImport"
-          :title="needsImport ? 'Import the round\'s images first.' : undefined"
-          @click="transition('active')"
-        >
-          Activate
-        </CdxButton>
-
-        <CdxButton v-if="round.state === 'active'" :disabled="busy" @click="transition('paused')">
-          Pause
-        </CdxButton>
-
-        <CdxButton
-          v-if="round.state === 'active' || round.state === 'paused'"
-          action="progressive"
-          :disabled="busy"
-          @click="transition('finalized')"
-        >
-          Finalize round
-        </CdxButton>
-
-        <CdxButton @click="router.push({ name: 'round-results', params: { id: round.id } })">
-          View results
-        </CdxButton>
-
-        <CdxButton @click="download('csv')">Download results</CdxButton>
-        <CdxButton @click="download('txt')">Download entries</CdxButton>
-
-        <CdxButton
-          v-if="round.state === 'finalized'"
-          action="progressive"
-          weight="primary"
-          @click="deriveOpen = true"
-        >
-          Create next round
-        </CdxButton>
-      </div>
     </div>
 
     <CdxDialog
