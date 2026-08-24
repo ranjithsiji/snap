@@ -222,7 +222,12 @@ class RoundPopulationService
         }
 
         if ($round->qualifiedImageCount() === 0) {
-            throw new RuntimeException('The round has no qualified images to vote on.');
+            // Saving a round no longer imports its category, so an
+            // unimported round is the ordinary case here rather than a
+            // strange one. Say which step is missing.
+            throw new RuntimeException($round->hasOwnSource()
+                ? 'The round has no images yet. Import from its Commons category first.'
+                : 'The round has no qualified images to vote on.');
         }
 
         if ($round->activeJurorCount() === 0) {

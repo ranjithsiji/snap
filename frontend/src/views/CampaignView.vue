@@ -4,16 +4,20 @@ import { useRouter } from 'vue-router'
 import {
   CdxButton,
   CdxField,
+  CdxIcon,
   CdxInfoChip,
   CdxMessage,
   CdxProgressBar,
 } from '@wikimedia/codex'
+import { cdxIconEdit } from '@wikimedia/codex-icons'
 import CommonsChipInput from '@/components/CommonsChipInput.vue'
 import { api } from '@/api'
+import { useSession } from '@/stores/session'
 import { formatDeadline, formatNumber } from '@/format'
 
 const props = defineProps({ id: { type: String, required: true } })
 const router = useRouter()
+const session = useSession()
 
 const campaign = ref(null)
 const participants = ref({})
@@ -101,6 +105,12 @@ async function reimport() {
         </p>
       </div>
       <div class="row">
+        <CdxButton
+          v-if="session.isLead"
+          @click="router.push({ name: 'campaign-edit', params: { id: campaign.id } })"
+        >
+          <CdxIcon :icon="cdxIconEdit" /> Edit campaign
+        </CdxButton>
         <CdxButton :disabled="busy" @click="reimport">
           {{ busy ? 'Importing…' : 'Re-import from source' }}
         </CdxButton>

@@ -23,6 +23,11 @@ const props = defineProps({
 const router = useRouter()
 const isEdit = computed(() => props.id !== null)
 
+// Held from the loaded round: an active round's settings still change, but
+// with consequences worth naming before they are changed.
+const roundState = ref(null)
+const isActive = computed(() => roundState.value === 'active')
+
 const votingMethods = [
   { label: 'Yes/No', value: 'yesno' },
   { label: 'Rating', value: 'rating' },
@@ -91,6 +96,7 @@ onMounted(async () => {
       },
     }
 
+    roundState.value = round.state
     jurors.value = data.jurors.map((juror) => juror.username)
   } catch (e) {
     error.value = e.message
@@ -221,6 +227,14 @@ async function submit() {
       <!-- Right column: file settings -->
       <div>
         <h2 class="section-title">Round file settings</h2>
+
+        <!-- Saying so up front, because the effect is invisible otherwise:
+             changing a rule mid-round re-qualifies only images nobody has
+             voted on yet. Votes already cast stand. -->
+        <CdxMessage v-if="isActive" type="warning" inline>
+          This round is active. Changing these rules re-applies them to images
+          that have not been voted on yet; votes already cast are kept.
+        </CdxMessage>
 
         <CdxField is-fieldset>
           <CdxCheckbox v-model="form.fileSettings.disqualifyJurors">

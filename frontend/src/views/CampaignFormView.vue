@@ -1,18 +1,23 @@
 <script setup>
-import { ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   CdxButton,
   CdxCheckbox,
   CdxField,
   CdxMessage,
+  CdxProgressBar,
   CdxRadio,
   CdxTextArea,
   CdxTextInput,
 } from '@wikimedia/codex'
+import CommonsLookup from '@/components/CommonsLookup.vue'
 import { api } from '@/api'
 
+const props = defineProps({ id: { type: String, default: null } })
+
 const router = useRouter()
+const isEdit = computed(() => props.id !== null)
 
 const form = ref({
   name: '',
@@ -26,21 +31,53 @@ const form = ref({
 })
 
 const busy = ref(false)
+const loading = ref(false)
 const error = ref(null)
 const progress = ref(null)
+
+onMounted(async () => {
+  if (!isEdit.value) {
+    return
+  }
+
+  loading.value = true
+
+  try {
+    const data = await api.get(`/campaigns/${props.id}`)
+    const campaign = data.campaign
+
+    form.value = {
+      name: campaign.name,
+      year: campaign.year ?? new Date().getFullYear(),
+      description: campaign.description ?? '',
+      sourceType: campaign.sourceType ?? 'category',
+      sourceCategory: campaign.sourceCategory ?? '',
+      sourceUrl: campaign.sourceUrl ?? '',
+      sourceFileList: campaign.sourceFileList ?? '',
+      // Editing settings is not a reason to re-read Commons; the campaign
+      // page has its own button for that.
+      importNow: false,
+    }
+  } catch (e) {
+    error.value = e.message
+  } finally {
+    loading.value = false
+  }
+})
 
 async function submit() {
   error.value = null
   busy.value = true
-  progress.value = form.value.importNow
+  progress.value = !isEdit.value && form.value.importNow
     ? 'Importing images from Commons. Large categories can take a few minutes…'
     : null
 
   try {
-    const data = await api.post('/campaigns', {
-      ...form.value,
-      year: Number(form.value.year) || null,
-    })
+    const payload = { ...form.value, year: Number(form.value.year) || null }
+
+    const data = isEdit.value
+      ? await api.patch(`/campaigns/${props.id}`, payload)
+      : await api.post('/campaigns', payload)
 
     router.push({ name: 'campaign', params: { id: data.campaign.id } })
   } catch (e) {
@@ -55,9 +92,10 @@ async function submit() {
 <template>
   <div class="page-head">
     <div>
-      <h1 class="page-title">New campaign</h1>
+      <h1 class="page-title">{{ isEdit ? 'Edit campaign' : 'New campaign' }}</h1>
       <p class="page-subtitle">
-        The source is set once here; every round draws its images from it.
+        The campaign pool is optional: each round imports from its own
+        Commons category unless it is left without one.
       </p>
     </div>
   </div>
@@ -65,7 +103,9 @@ async function submit() {
   <CdxMessage v-if="error" type="error">{{ error }}</CdxMessage>
   <CdxMessage v-if="progress" type="notice">{{ progress }}</CdxMessage>
 
-  <form class="card" style="max-width: 46rem" @submit.prevent="submit">
+  <CdxProgressBar v-if="loading" aria-label="Loading campaign" />
+
+  <form v-else class="card" style="max-width: 46rem" @submit.prevent="submit">
     <CdxField>
       <template #label>Campaign name</template>
       <CdxTextInput v-model="form.name" placeholder="Wiki Loves Earth in India 2026" required />
@@ -100,7 +140,11 @@ async function submit() {
         Category on Wikimedia Commons that gathers all contest images. Example: Images from Wiki
         Loves Monuments 2017 in Ghana.
       </template>
-      <CdxTextInput v-model="form.sourceCategory" placeholder="Enter category" />
+      <CommonsLookup
+        v-model="form.sourceCategory"
+        kind="categories"
+        placeholder="Search Commons categories…"
+      />
     </CdxField>
 
     <CdxField v-else-if="form.sourceType === 'filelist_url'">
@@ -117,11 +161,14 @@ async function submit() {
       <CdxTextArea v-model="form.sourceFileList" rows="8" placeholder="Example.jpg&#10;Another.jpg" />
     </CdxField>
 
-    <CdxField is-fieldset>
+    <!-- Only on creation: an edit should not silently start a long read of
+         Commons, and the campaign page has its own re-import button. -->
+    <CdxField v-if="!isEdit" is-fieldset>
       <CdxCheckbox v-model="form.importNow">
         Import images from Commons now
         <template #description>
-          Leave this on unless you want to configure the campaign first and import later.
+          Only needed for a shared pool. Rounds import from their own category,
+          so this can be left off.
         </template>
       </CdxCheckbox>
     </CdxField>
@@ -129,7 +176,7 @@ async function submit() {
     <div class="row row-end" style="margin-top: 1rem">
       <CdxButton type="button" @click="router.back()">Cancel</CdxButton>
       <CdxButton action="progressive" weight="primary" type="submit" :disabled="busy">
-        {{ busy ? 'Creating…' : 'Create campaign' }}
+        {{ busy ? (isEdit ? 'Saving…' : 'Creating…') : isEdit ? 'Save campaign' : 'Create campaign' }}
       </CdxButton>
     </div>
   </form>

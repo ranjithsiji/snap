@@ -43,7 +43,10 @@ const routes = [
     path: '/campaigns/new',
     name: 'campaign-new',
     component: () => import('@/views/CampaignFormView.vue'),
-    meta: { role: 'administrator' },
+    // A lead runs the campaigns inside their project, so they create them
+    // too. This said 'administrator', which was stricter than the API has
+    // ever been and hid the page from the people who use it most.
+    meta: { role: 'lead' },
   },
   {
     path: '/campaigns/:id',
@@ -51,6 +54,15 @@ const routes = [
     component: () => import('@/views/CampaignView.vue'),
     props: true,
     meta: { role: 'organizer' },
+  },
+  {
+    // Creating a campaign is an administrator's job, but a lead running
+    // one needs to correct its name or source without waiting on them.
+    path: '/campaigns/:id/edit',
+    name: 'campaign-edit',
+    component: () => import('@/views/CampaignFormView.vue'),
+    props: true,
+    meta: { role: 'lead' },
   },
   {
     path: '/campaigns/:campaignId/rounds/new',

@@ -421,6 +421,39 @@ body {
   font-size: var(--font-size-x-small);
 }
 
+/* --- Import panel ----------------------------------------------------
+   Shown in place of the progress summary while a round is still empty:
+   there is no progress to report yet, and importing is the only thing
+   worth doing on the page. */
+.import-panel {
+  margin-bottom: var(--spacing-150);
+}
+
+.import-lede {
+  margin: 0 0 var(--spacing-75);
+}
+
+.import-total {
+  margin: 0 0 var(--spacing-100);
+  font-size: var(--font-size-large);
+}
+
+.import-actions {
+  gap: var(--spacing-75);
+  align-items: center;
+}
+
+.import-running {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-50);
+}
+
+.import-running-text {
+  margin: 0;
+  font-size: var(--font-size-small);
+}
+
 /* --- Round summary ---------------------------------------------------
    Progress first and largest, because "how far along is this?" is what
    brings anyone to a round page. */

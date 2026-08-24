@@ -55,6 +55,38 @@ class RoundActions
      * Parallel rounds of a campaign — Trees, Rivers — each gather their own
      * category, so importing belongs to the round rather than the campaign.
      */
+    /**
+     * How many files the round's category holds, before importing any.
+     *
+     * Asked on its own so the coordinator sees the size of the job before
+     * starting it, and so a long import reports against a known total
+     * rather than counting up from nothing. One replica query, which is
+     * why it is cheap enough to offer at all.
+     */
+    public function importPreview(Request $request, Response $response, array $args): Response
+    {
+        $round = $this->find($args['id']);
+        $actor = $this->actor($request);
+
+        if ($actor !== null) {
+            $this->access->requireOrganizer($actor, $round->getCampaign());
+        }
+
+        $category = $round->getSourceCategory();
+
+        if ($category === null || $category === '') {
+            throw DomainException::badRequest('This round has no Commons category to import from.');
+        }
+
+        return Json::write($response, [
+            'category' => $category,
+            // Null off the replica: the API cannot count a category without
+            // reading it, and the UI says so rather than inventing a total.
+            'total' => $this->import->countCategory($category),
+            'source' => $this->import->metadataSource(),
+        ]);
+    }
+
     public function import(Request $request, Response $response, array $args): Response
     {
         $round = $this->find($args['id']);
@@ -271,19 +303,19 @@ class RoundActions
 
         $population = null;
 
-        if (Json::bool($body, 'populate', true)) {
-            // A round that names its own category is filled from it. Only a
-            // round without one falls back to the campaign pool, which is
-            // how a round derived from an earlier one is filled — asking
-            // for the pool unconditionally failed with "campaign images
-            // have not been imported yet" now that campaigns no longer
-            // import anything themselves.
-            if ($round->hasOwnSource()) {
-                $outcome = $this->import->importRoundSource($round, $this->actor($request));
-                $population = $this->population->populate($round, $outcome['images'])->toArray();
-            } elseif ($campaign->hasBeenImported()) {
-                $population = $this->population->populateFromCampaignPool($round)->toArray();
-            }
+        // Saving a round no longer reads its category. A Commons category
+        // of several thousand files took long enough that the request
+        // looked hung, and a failure part-way through lost the round along
+        // with the import — the coordinator had to fill the form again.
+        // Importing is now its own step, started from the round page.
+        //
+        // A round without a category of its own is still filled from the
+        // campaign pool, which is only a local copy and costs nothing.
+        if (Json::bool($body, 'populate', true)
+            && !$round->hasOwnSource()
+            && $campaign->hasBeenImported()
+        ) {
+            $population = $this->population->populateFromCampaignPool($round)->toArray();
         }
 
         $this->log->record(

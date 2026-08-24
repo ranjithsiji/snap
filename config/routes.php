@@ -101,6 +101,9 @@ return function (App $app): void {
             $org->delete('/rounds/{id}', [RoundActions::class, 'delete']);
             $org->post('/rounds/{id}/state/{state}', [RoundActions::class, 'transition']);
             $org->post('/rounds/{id}/allocate', [RoundActions::class, 'allocate']);
+            // Before /import/{sourceId}/retry, so "preview" is not read as
+            // a source id.
+            $org->get('/rounds/{id}/import/preview', [RoundActions::class, 'importPreview']);
             $org->post('/rounds/{id}/import', [RoundActions::class, 'import']);
             $org->post('/rounds/{id}/import/{sourceId}/retry', [RoundActions::class, 'retryImport']);
             $org->get('/rounds/{id}/thresholds', [RoundActions::class, 'thresholds']);

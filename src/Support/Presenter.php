@@ -73,6 +73,10 @@ final class Presenter
             'sourceType' => $campaign->getSourceType()->value,
             'sourceCategory' => $campaign->getSourceCategory(),
             'sourceUrl' => $campaign->getSourceUrl(),
+            // Carried so the edit form can load a file-list campaign and
+            // save it back unchanged; without it, editing anything else
+            // would submit an empty list and wipe the source.
+            'sourceFileList' => $campaign->getSourceFileList(),
             'sourceSummary' => $campaign->sourceSummary(),
             'importedAt' => self::date($campaign->getImportedAt()),
             'imageCount' => $campaign->getImages()->count(),

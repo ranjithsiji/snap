@@ -5,11 +5,13 @@ import {
   CdxButton,
   CdxDialog,
   CdxField,
+  CdxIcon,
   CdxInfoChip,
   CdxMessage,
   CdxProgressBar,
   CdxTextInput,
 } from '@wikimedia/codex'
+import { cdxIconDownload } from '@wikimedia/codex-icons'
 import CommonsLookup from '@/components/CommonsLookup.vue'
 import { api } from '@/api'
 import { formatDeadline, formatNumber, formatPixels } from '@/format'
@@ -24,6 +26,64 @@ const loading = ref(true)
 const error = ref(null)
 const notice = ref(null)
 const busy = ref(false)
+
+const preview = ref(null)
+const importing = ref(false)
+
+/**
+ * A round that draws from its own category but holds nothing yet.
+ *
+ * Only its own category counts: a round filled from the campaign pool has
+ * nothing to import here, and one that genuinely imported zero files is
+ * still unimported as far as the coordinator is concerned — it needs the
+ * button, not an empty progress bar.
+ */
+const needsImport = computed(
+  () => Boolean(round.value?.sourceCategory) && (stats.value?.files ?? 0) === 0,
+)
+
+/** The category's size, asked before importing so the job is legible. */
+async function loadPreview() {
+  if (!needsImport.value) {
+    return
+  }
+
+  try {
+    preview.value = await api.get(`/rounds/${props.id}/import/preview`)
+  } catch {
+    // A count is a courtesy, not a precondition: the import still runs.
+    preview.value = { total: null }
+  }
+}
+
+async function runImport() {
+  error.value = null
+  notice.value = null
+  importing.value = true
+
+  try {
+    const data = await api.post(`/rounds/${props.id}/import`)
+
+    // Reloads rather than patching state: the import changes the image
+    // counts, the qualified set and the source list at once.
+    await load()
+
+    const added = data.import?.added ?? 0
+    const seen = data.import?.processed ?? 0
+
+    notice.value = added === seen
+      ? `Imported ${formatNumber(added)} image(s).`
+      : `Imported ${formatNumber(added)} image(s) from ${formatNumber(seen)} read.`
+
+    if ((data.warnings ?? []).length > 0) {
+      notice.value += ` ${data.warnings.join(' ')}`
+    }
+  } catch (e) {
+    error.value = e.message
+  } finally {
+    importing.value = false
+  }
+}
 
 const deriveOpen = ref(false)
 const derive = ref({ name: '', minAcceptCount: '', minAverageScore: '', topN: '' })
@@ -78,7 +138,12 @@ async function load() {
   }
 }
 
-onMounted(load)
+// The count is asked after the round is known, since whether to ask at all
+// depends on its source and image count.
+onMounted(async () => {
+  await load()
+  await loadPreview()
+})
 
 async function transition(state) {
   error.value = null
@@ -162,9 +227,60 @@ async function submitDerivation() {
     <CdxMessage v-if="error" type="error">{{ error }}</CdxMessage>
     <CdxMessage v-if="notice" type="success">{{ notice }}</CdxMessage>
 
+    <!-- Before anything is imported there is no progress to report, so the
+         page leads with the one action that matters. Saving a round no
+         longer reads its category: a category of thousands took long
+         enough that the save looked hung, and a failure lost the round
+         along with the import. -->
+    <div v-if="needsImport" class="card import-panel">
+      <h2 class="section-title" style="margin-top: 0">Import images</h2>
+
+      <p class="muted import-lede">
+        This round has no images yet. They are read from
+        <strong>{{ round.sourceCategory }}</strong> on Commons.
+      </p>
+
+      <!-- The total is one replica query, so it can be shown before
+           committing to the import rather than after. -->
+      <p v-if="preview && preview.total !== null" class="import-total">
+        <strong>{{ formatNumber(preview.total) }}</strong>
+        <span class="muted"> file(s) in this category</span>
+      </p>
+      <p v-else-if="preview" class="muted import-total">
+        This deployment reads Commons through the API, which cannot count a
+        category without fetching it.
+      </p>
+
+      <!-- A spinner alone leaves the coordinator guessing whether a long
+           import is working; naming the category and the total it is
+           working through is what makes it legible. -->
+      <div v-if="importing" class="import-running">
+        <CdxProgressBar aria-label="Importing files from Commons" />
+        <p class="import-running-text">
+          Importing files from Commons…
+          <span v-if="preview && preview.total !== null" class="muted">
+            {{ formatNumber(preview.total) }} to read. This can take a few
+            minutes for a large category — leaving this page does not stop it.
+          </span>
+        </p>
+      </div>
+
+      <div v-else class="row import-actions">
+        <CdxButton
+          action="progressive"
+          weight="primary"
+          :disabled="busy"
+          @click="runImport"
+        >
+          <CdxIcon :icon="cdxIconDownload" /> Import images
+        </CdxButton>
+        <span v-if="preview === null" class="muted">Checking the category…</span>
+      </div>
+    </div>
+
     <!-- How far the round has got, above its configuration: it is the
          question anyone opening this page came to answer. -->
-    <div v-if="stats" class="round-summary">
+    <div v-else-if="stats" class="round-summary">
       <div class="card progress-card">
         <h2 class="section-title" style="margin-top: 0">Round progress</h2>
 
@@ -347,10 +463,14 @@ async function submitDerivation() {
       </div>
 
       <div class="row row-end wrap" style="margin-top: 1.5rem">
+        <!-- Disabled rather than hidden while the round is empty: the
+             server refuses this anyway, and offering a button that only
+             returns an error is worse than showing why it is not ready. -->
         <CdxButton
           v-if="round.state === 'draft' || round.state === 'paused'"
           action="progressive"
-          :disabled="busy"
+          :disabled="busy || needsImport"
+          :title="needsImport ? 'Import the round\'s images first.' : undefined"
           @click="transition('active')"
         >
           Activate
