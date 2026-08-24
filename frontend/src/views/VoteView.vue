@@ -1,8 +1,16 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { CdxButton, CdxMessage, CdxProgressBar, CdxTabs, CdxTab } from '@wikimedia/codex'
 import {
+  CdxButton,
+  CdxIcon,
+  CdxMessage,
+  CdxProgressBar,
+  CdxTabs,
+  CdxTab,
+} from '@wikimedia/codex'
+import {
+  cdxIconCheck,
   cdxIconClose,
   cdxIconDownload,
   cdxIconHeart,
@@ -33,6 +41,33 @@ const exhausted = ref(false)
 // "single" walks one image at a time; "gallery" is the fast grid pass.
 const mode = ref('single')
 const showFullSize = ref(false)
+
+/**
+ * What the photograph is shown against.
+ *
+ * Not a fixed choice: a dark surround flatters a bright image and buries
+ * a dark one, and light does the reverse. Since telling those apart is
+ * the juror's whole job, the backdrop is theirs to set — and remembered,
+ * because it is a working preference rather than a per-image decision.
+ */
+const backdrops = [
+  { value: 'dark', label: 'Dark' },
+  { value: 'grey', label: 'Grey' },
+  { value: 'light', label: 'Light' },
+  { value: 'checker', label: 'Checkered' },
+]
+
+const backdrop = ref(localStorage.getItem('snap-backdrop') ?? 'grey')
+
+function cycleBackdrop() {
+  const index = backdrops.findIndex((b) => b.value === backdrop.value)
+  backdrop.value = backdrops[(index + 1) % backdrops.length].value
+  localStorage.setItem('snap-backdrop', backdrop.value)
+}
+
+const backdropLabel = computed(
+  () => backdrops.find((b) => b.value === backdrop.value)?.label ?? 'Grey',
+)
 
 const current = computed(() => images.value[0] ?? null)
 const isRanking = computed(() => round.value?.votingMethod === 'rank')
@@ -220,81 +255,123 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
       </CdxButton>
     </div>
 
-    <!-- Single image: stage on the left, details and actions on the right -->
+    <!-- Single image: the photograph and everything acting on it in one
+         frame, so a juror's eyes travel a short distance between
+         deciding and voting; supporting detail to the side. -->
     <div v-else class="vote-layout">
-      <div class="vote-stage">
-        <img
-          :src="showFullSize ? current.fileUrl : current.thumbUrl"
-          :alt="current.name ?? 'Image awaiting judgement'"
-        />
+      <div class="stage">
+        <div class="stage-bar">
+          <span class="stage-position">
+            {{ formatNumber(counts.all - remaining + 1) }} of {{ formatNumber(counts.all) }}
+          </span>
+
+          <span class="spacer"></span>
+
+          <CdxButton
+            weight="quiet"
+            class="stage-tool"
+            :title="`Backdrop: ${backdropLabel}`"
+            @click="cycleBackdrop"
+          >
+            <span class="backdrop-swatch" :class="`swatch-${backdrop}`"></span>
+            {{ backdropLabel }}
+          </CdxButton>
+
+          <CdxButton
+            weight="quiet"
+            class="stage-tool"
+            :title="showFullSize ? 'Fit to the frame' : 'Show at full size'"
+            @click="showFullSize = !showFullSize"
+          >
+            <CdxIcon :icon="cdxIconImage" />
+          </CdxButton>
+
+          <CdxButton
+            v-if="current.descriptionUrl"
+            weight="quiet"
+            class="stage-tool"
+            title="Open the Commons page"
+            @click="window.open(current.descriptionUrl, '_blank', 'noopener')"
+          >
+            <CdxIcon :icon="cdxIconLink" />
+          </CdxButton>
+
+          <CdxButton
+            weight="quiet"
+            class="stage-tool"
+            :class="{ 'is-on': current.isFavorite }"
+            :title="current.isFavorite ? 'Remove from favourites' : 'Add to favourites'"
+            @click="toggleFavorite"
+          >
+            <CdxIcon :icon="cdxIconHeart" />
+          </CdxButton>
+        </div>
+
+        <div class="stage-image" :class="[`backdrop-${backdrop}`, { 'is-full': showFullSize }]">
+          <img
+            :src="showFullSize ? current.fileUrl : current.thumbUrl"
+            :alt="current.name ?? 'Image awaiting judgement'"
+          />
+        </div>
+
+        <!-- The vote sits directly under the photograph rather than in
+             the sidebar: it is the one thing done on every image. -->
+        <div class="stage-actions">
+          <div v-if="isYesNo" class="row">
+            <CdxButton action="progressive" weight="primary" :disabled="busy" @click="vote(1)">
+              <CdxIcon :icon="cdxIconCheck" /> Accept
+            </CdxButton>
+            <CdxButton action="destructive" :disabled="busy" @click="vote(0)">
+              <CdxIcon :icon="cdxIconClose" /> Decline
+            </CdxButton>
+          </div>
+
+          <div v-else class="star-row">
+            <button
+              v-for="star in stars"
+              :key="star"
+              type="button"
+              class="star"
+              :aria-label="`Rate ${star}`"
+              :disabled="busy"
+              @click="vote(star)"
+            >
+              ★
+            </button>
+          </div>
+
+          <span class="spacer"></span>
+
+          <CdxButton weight="quiet" :disabled="busy" @click="skip">
+            <CdxIcon :icon="cdxIconNext" /> Skip
+          </CdxButton>
+        </div>
       </div>
 
       <aside class="vote-panel">
         <h2 class="vote-filename">{{ current.name ?? 'Image awaiting judgement' }}</h2>
-        <p class="muted" style="margin: 0">{{ formatNumber(remaining) }} image remaining</p>
 
-        <div class="row wrap" style="margin-top: 0.75rem">
-          <CdxButton weight="quiet" :icon="cdxIconImage" @click="showFullSize = !showFullSize">
-            {{ showFullSize ? 'Show fitted' : 'Show full-size' }}
-          </CdxButton>
-          <CdxButton
-            v-if="current.descriptionUrl"
-            weight="quiet"
-            :icon="cdxIconLink"
-            @click="window.open(current.descriptionUrl, '_blank', 'noopener')"
-          >
-            Commons page
-          </CdxButton>
-        </div>
-
-        <h3 class="vote-section">Vote</h3>
-
-        <div v-if="isYesNo" class="row">
-          <CdxButton action="progressive" weight="primary" :disabled="busy" @click="vote(1)">
-            Accept
-          </CdxButton>
-          <CdxButton action="destructive" :disabled="busy" @click="vote(0)">Decline</CdxButton>
-        </div>
-
-        <div v-else class="star-row">
-          <button
-            v-for="star in stars"
-            :key="star"
-            type="button"
-            class="star"
-            :aria-label="`Rate ${star}`"
-            :disabled="busy"
-            @click="vote(star)"
-          >
-            ★
-          </button>
-        </div>
-
-        <p class="muted vote-hint">
-          You can also use the keyboard to vote.<br />
-          <template v-if="isYesNo"><kbd>↑</kbd> <kbd>↓</kbd> — Accept / Decline<br /></template>
-          <template v-else><kbd>1</kbd>–<kbd>{{ round.maxRating }}</kbd> — Rate<br /></template>
-          <kbd>→</kbd> — Skip (vote later)
-        </p>
-
-        <h3 class="vote-section">Actions</h3>
-
-        <div class="stack" style="gap: 0.5rem">
-          <CdxButton weight="quiet" :icon="cdxIconHeart" @click="toggleFavorite">
-            {{ current.isFavorite ? 'Remove from favorites' : 'Add to favorites' }}
-          </CdxButton>
-          <CdxButton weight="quiet" :icon="cdxIconNext" :disabled="busy" @click="skip">
-            Skip (vote later)
-          </CdxButton>
-          <CdxButton weight="quiet" @click="mode = 'gallery'">Edit previous votes</CdxButton>
+        <div class="vote-progress">
+          <div class="meter">
+            <span
+              :style="{ width: `${counts.all ? ((counts.all - remaining) / counts.all) * 100 : 0}%` }"
+            ></span>
+          </div>
+          <p class="muted vote-progress-text">
+            {{ formatNumber(remaining) }} left of {{ formatNumber(counts.all) }}
+          </p>
         </div>
 
         <template v-if="current.width || current.megapixels">
-          <h3 class="vote-section">Description</h3>
+          <h3 class="vote-section">Image</h3>
           <dl class="stat-list">
-            <div v-if="current.megapixels">
-              <dt>{{ current.megapixels }} Mpix</dt>
+            <div v-if="current.width">
+              <dt>Resolution</dt>
               <dd>{{ current.width }} × {{ current.height }}</dd>
+            </div>
+            <div v-if="current.megapixels">
+              <dt>Megapixels</dt>
+              <dd>{{ current.megapixels }} Mpix</dd>
             </div>
           </dl>
         </template>
@@ -309,6 +386,17 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
             </template>
           </dl>
         </template>
+
+        <h3 class="vote-section">Keyboard</h3>
+        <p class="muted vote-hint">
+          <template v-if="isYesNo"><kbd>↑</kbd> <kbd>↓</kbd> — Accept / Decline<br /></template>
+          <template v-else><kbd>1</kbd>–<kbd>{{ round.maxRating }}</kbd> — Rate<br /></template>
+          <kbd>→</kbd> — Skip (vote later)
+        </p>
+
+        <CdxButton weight="quiet" style="margin-top: 0.75rem" @click="mode = 'gallery'">
+          Edit previous votes
+        </CdxButton>
       </aside>
     </div>
   </template>

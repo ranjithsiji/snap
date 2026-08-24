@@ -68,50 +68,86 @@
    follows from them, so there is no second set of styles to keep in
    step. */
 :root[data-theme='dark'] {
-  --snap-ink: #e8eaf5;
+  /* Near-neutral rather than a dark navy. Tinted surroundings shift how
+     a photograph reads — a blue page makes a warm image look warmer —
+     and judging those images is the entire purpose of the tool, so the
+     surfaces stay as close to grey as a dark theme allows. */
+  --snap-ink: #e6e8ea;
 
   --color-base: var(--snap-ink);
-  --color-emphasized: #f6f7fc;
-  --color-subtle: #a8adc9;
-  --color-placeholder: #7f85a6;
-  --color-inverted: #0b0d24;
+  --color-emphasized: #f5f6f7;
+  --color-subtle: #a0a6ad;
+  --color-placeholder: #7b8189;
+  --color-inverted: #14171a;
 
-  --background-color-base: #171a3a;
-  --background-color-neutral-subtle: #0f1230;
-  --background-color-neutral: #1e2246;
-  --background-color-interactive: #232752;
-  --background-color-interactive-subtle: #1b1f42;
+  --background-color-base: #1c2024;
+  --background-color-neutral-subtle: #141719;
+  --background-color-neutral: #24282d;
+  --background-color-interactive: #2b3036;
+  --background-color-interactive-subtle: #212529;
 
-  --border-color-base: #2e3363;
-  --border-color-subtle: #262a55;
-  --border-color-interactive: #3a3f75;
+  --border-color-base: #363b42;
+  --border-color-subtle: #2b3036;
+  --border-color-interactive: #454b53;
 
-  /* Periwinkle rather than navy: the navy that carries interactive
-     colour in light mode is the background here, so it would vanish. */
-  --color-progressive: var(--snap-periwinkle);
-  --color-progressive--hover: #dfe4f8;
-  --color-progressive--active: #b3bdec;
-  --color-progressive--focus: var(--snap-periwinkle);
-  --background-color-progressive: #3d4a9e;
-  --background-color-progressive--hover: #4a58b5;
-  --background-color-progressive--active: #33409088;
-  --background-color-progressive-subtle: #1d2250;
-  --border-color-progressive: #4a58b5;
+  /* Teal carries interactive colour here. The navy of the logo is the
+     background in this theme, so it cannot also be the accent, and teal
+     holds its contrast against near-black without tinting the page. */
+  --snap-teal: #4db3d4;
+  --color-progressive: var(--snap-teal);
+  --color-progressive--hover: #6cc6e3;
+  --color-progressive--active: #3a9ab8;
+  --color-progressive--focus: var(--snap-teal);
+  --background-color-progressive: #1d7fa3;
+  --background-color-progressive--hover: #2494bb;
+  --background-color-progressive--active: #186a88;
+  --background-color-progressive-subtle: #16323d;
+  --border-color-progressive: #2494bb;
 
-  --color-link: var(--snap-periwinkle);
-  --color-link--visited: #b9a8e6;
+  --color-link: var(--snap-teal);
+  --color-link--visited: #b49ad8;
 
-  /* Normal (non-progressive) buttons: Codex's defaults are tuned for a
-     light page and leave the label almost invisible on a dark one. */
-  --color-base--hover: #f6f7fc;
-  --background-color-interactive-subtle--hover: #262b58;
-  --background-color-interactive-subtle--active: #2f3468;
-  --border-color-base--hover: #3d4275;
+  /* Normal buttons, notices and chips take their text from
+     --color-neutral and --color-notice, not --color-base. Left at the
+     light-theme value those render #404244 on a near-black background —
+     measured at barely above 1:1 contrast, effectively invisible. */
+  --color-neutral: var(--snap-ink);
+  --color-notice: var(--snap-ink);
+  --color-base--hover: #f5f6f7;
+  --background-color-interactive-subtle--hover: #2b3036;
+  --background-color-interactive-subtle--active: #343a41;
+  --border-color-base--hover: #4a5058;
 
-  --snap-shadow: rgba(0, 0, 0, 0.35);
-  /* The bar sits above the page rather than below it in tone, which is
-     what keeps it legible once the page itself is dark. */
-  --snap-bar: #0b0d24;
+  /* Chips and other neutral surfaces, which otherwise stay white. */
+  --background-color-neutral-subtle--hover: #24282d;
+  --color-disabled: #5c626a;
+  --background-color-disabled: #2b3036;
+  --background-color-disabled-subtle: #212529;
+
+  /* Status colours. The subtle backgrounds are near-white by default,
+     which on this page reads as a bright blob rather than a chip; the
+     text tones are darkened-for-white and need lifting to stay legible
+     against them. */
+  --background-color-notice-subtle: #24282d;
+  --border-color-notice: #454b53;
+  --background-color-success-subtle: #12291d;
+  --border-color-success: #2f6b47;
+  --color-success: #6cc48b;
+  --background-color-warning-subtle: #2e2413;
+  --border-color-warning: #7a5f24;
+  --color-warning: #d9a441;
+  --background-color-error-subtle: #2e1618;
+  --border-color-error: #7d3339;
+  --color-error: #e08b93;
+  --color-destructive: #e08b93;
+  --color-destructive--hover: #eba5ac;
+  --border-color-destructive: #7d3339;
+  --background-color-destructive-subtle: #2e1618;
+
+  --snap-shadow: rgba(0, 0, 0, 0.4);
+  /* Darker than the page, so the bar reads as a frame around it. */
+  --snap-bar: #0e1113;
+  --snap-periwinkle: var(--snap-teal);
 }
 
 body {
@@ -403,21 +439,119 @@ body {
   }
 }
 
-.vote-stage {
+/* --- The stage -------------------------------------------------------
+   The photograph, what identifies it, and the vote — one frame, so a
+   juror's eyes travel a short distance between deciding and acting. */
+.stage {
+  display: flex;
+  flex-direction: column;
+  background-color: var(--background-color-base);
+  border: 1px solid var(--border-color-subtle);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px var(--snap-shadow), 0 1px 3px var(--snap-shadow);
+}
+
+.stage-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-25);
+  padding: var(--spacing-50) var(--spacing-75);
+  border-bottom: 1px solid var(--border-color-subtle);
+  background-color: var(--background-color-interactive-subtle);
+}
+
+.stage-position {
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+.stage-tool.is-on {
+  color: var(--color-destructive);
+}
+
+/* The backdrop is the juror's choice, because a dark surround flatters a
+   bright photograph and buries a dark one — and telling those apart is
+   the work. */
+.stage-image {
   display: grid;
   place-items: center;
-  background-color: var(--background-color-interactive-subtle);
-  border: var(--border-base);
-  border-radius: var(--border-radius-base);
-  min-height: 70vh;
+  min-height: 60vh;
   padding: var(--spacing-75);
   overflow: auto;
 }
 
-.vote-stage img {
+.stage-image img {
   max-width: 100%;
-  max-height: 70vh;
+  max-height: 60vh;
   object-fit: contain;
+}
+
+.stage-image.is-full {
+  align-items: start;
+  justify-items: start;
+}
+
+.stage-image.is-full img {
+  max-width: none;
+  max-height: none;
+}
+
+.backdrop-dark { background-color: #1a1a1a; }
+.backdrop-grey { background-color: #808080; }
+.backdrop-light { background-color: #f4f4f4; }
+
+/* Checkerboard, for judging whether a photograph has a transparent or
+   simply very pale background. */
+.backdrop-checker {
+  background-color: #fff;
+  background-image:
+    linear-gradient(45deg, #d8d8d8 25%, transparent 25%),
+    linear-gradient(-45deg, #d8d8d8 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #d8d8d8 75%),
+    linear-gradient(-45deg, transparent 75%, #d8d8d8 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+}
+
+.backdrop-swatch {
+  display: inline-block;
+  width: 0.75rem;
+  height: 0.75rem;
+  border: 1px solid var(--border-color-base);
+  border-radius: 2px;
+  vertical-align: -1px;
+}
+
+.swatch-dark { background-color: #1a1a1a; }
+.swatch-grey { background-color: #808080; }
+.swatch-light { background-color: #f4f4f4; }
+.swatch-checker {
+  background-image:
+    linear-gradient(45deg, #d8d8d8 25%, #fff 25%),
+    linear-gradient(-45deg, #d8d8d8 25%, #fff 25%);
+  background-size: 6px 6px;
+}
+
+/* The vote, directly under the photograph: it is the one thing done to
+   every image, so it is not in the sidebar. */
+.stage-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-75);
+  padding: var(--spacing-75);
+  border-top: 1px solid var(--border-color-subtle);
+  background-color: var(--background-color-interactive-subtle);
+}
+
+.vote-progress {
+  margin: var(--spacing-75) 0 0;
+}
+
+.vote-progress-text {
+  margin: var(--spacing-25) 0 0;
+  font-size: var(--font-size-x-small);
 }
 
 .vote-panel {
