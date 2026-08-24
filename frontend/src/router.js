@@ -151,6 +151,13 @@ router.beforeEach(async (to) => {
     await session.load()
   }
 
+  // An already-signed-in visitor landing on /login (a stale tab, a
+  // bookmarked link) has nothing to do there — send them to their
+  // dashboard instead of showing the sign-in form over their own session.
+  if (to.name === 'login' && session.isAuthenticated) {
+    return { name: 'my-rounds' }
+  }
+
   if (to.meta.public) {
     return true
   }
