@@ -3,16 +3,16 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   CdxButton,
-  CdxDialog,
   CdxField,
+  CdxIcon,
   CdxInfoChip,
   CdxMessage,
   CdxProgressBar,
   CdxTab,
   CdxTabs,
   CdxTextArea,
-  CdxTextInput,
 } from '@wikimedia/codex'
+import { cdxIconArrowDown, cdxIconArrowUp } from '@wikimedia/codex-icons'
 import { api } from '@/api'
 import { useSession } from '@/stores/session'
 import OpinionThread from '@/components/OpinionThread.vue'
@@ -41,9 +41,11 @@ const error = ref(null)
 const notice = ref(null)
 const tab = ref('ranking')
 
-const myOrder = ref([])
-const proposeOpen = ref(false)
 const newPost = ref('')
+// Toggles the agreed-ranking tab between the row list (per-juror proposals
+// beside each image) and a gallery grid — some coordinators want to scan
+// every photograph at once rather than read down a list.
+const rankingView = ref('list')
 
 const conflicts = computed(() => images.value.filter((i) => i.isConflict))
 
@@ -62,13 +64,6 @@ async function load() {
     canFinalize.value = detail.canFinalize
     images.value = matrix.images
     revision.value = matrix.revision
-
-    // Seed the juror's draft from the agreed order, so they adjust rather
-    // than build a ranking from nothing.
-    myOrder.value = matrix.images.map((image) => ({
-      ...image,
-      myRank: String(myPosition(image) ?? image.position),
-    }))
   } catch (e) {
     error.value = e.message
   } finally {
@@ -78,52 +73,35 @@ async function load() {
 
 onMounted(load)
 
-/** This juror's own proposed position for an image, if they made one. */
-function myPosition(image) {
-  const mine = image.proposals.find((p) => p.juror === session.user?.username)
+/**
+ * Swaps an image with its neighbour and resubmits the whole agreed
+ * order — reorder() takes every image at once, same as propose(), so a
+ * single swap still means sending the complete list back.
+ */
+async function moveImage(index, direction) {
+  const target = index + direction
 
-  return mine ? mine.position : null
-}
+  if (target < 0 || target >= images.value.length) return
 
-/** Inserts at the requested rank and shifts the rest, avoiding duplicates. */
-function applyRank(index, raw) {
-  const entry = myOrder.value[index]
-  const requested = Number(raw)
-
-  if (!Number.isInteger(requested) || requested < 1) {
-    entry.myRank = raw
-    return
-  }
-
-  const target = Math.min(requested, myOrder.value.length)
-  const others = myOrder.value
-    .filter((_, i) => i !== index)
-    .sort((a, b) => Number(a.myRank) - Number(b.myRank))
-
-  others.splice(target - 1, 0, entry)
-
-  const positions = new Map(others.map((item, i) => [item.imageId, i + 1]))
-  myOrder.value = myOrder.value.map((item) => ({
-    ...item,
-    myRank: String(positions.get(item.imageId)),
-  }))
-}
-
-async function submitProposal() {
   busy.value = true
   error.value = null
 
   try {
-    const ordered = [...myOrder.value]
-      .sort((a, b) => Number(a.myRank) - Number(b.myRank))
-      .map((entry) => entry.imageId)
+    const order = images.value.map((image) => image.imageId)
+    ;[order[index], order[target]] = [order[target], order[index]]
 
-    const data = await api.post(`/meetings/${props.id}/proposals`, { order: ordered })
+    await api.post(`/meetings/${props.id}/order`, {
+      order,
+      revision: revision.value,
+    })
 
-    images.value = data.images
-    revision.value = data.revision
-    proposeOpen.value = false
-    notice.value = 'Your ranking has been recorded. The agreed order has been recalculated.'
+    // reorder() answers with the plain consensus list, not the fuller
+    // proposal matrix this screen actually displays — proposals, spread,
+    // isConflict — so the ranking tab is reloaded from proposals()
+    // instead of assigning that narrower shape over what is shown.
+    const matrix = await api.get(`/meetings/${props.id}/proposals`)
+    images.value = matrix.images
+    revision.value = matrix.revision
   } catch (e) {
     error.value = e.message
   } finally {
@@ -191,7 +169,12 @@ function onMatrixUpdated(updated) {
           {{ isFinalized ? 'finalized' : 'open' }}
         </CdxInfoChip>
 
-        <CdxButton v-if="!isFinalized" @click="proposeOpen = true">My ranking</CdxButton>
+        <CdxButton
+          v-if="!isFinalized"
+          @click="router.push({ name: 'meeting-rank', params: { id: props.id } })"
+        >
+          My ranking
+        </CdxButton>
 
         <CdxButton
           v-if="canFinalize && !isFinalized"
@@ -231,7 +214,7 @@ function onMatrixUpdated(updated) {
 
     <!-- Agreed ranking, with every juror's proposal beside it -->
     <div v-if="tab === 'ranking'" class="stack">
-      <div v-for="image in images" :key="image.imageId" class="card meeting-row">
+      <div v-for="(image, index) in images" :key="image.imageId" class="card meeting-row">
         <img :src="image.thumbUrl" :alt="image.title" class="meeting-thumb" />
 
         <div class="meeting-body">
@@ -243,6 +226,27 @@ function onMatrixUpdated(updated) {
             <span v-if="image.drift !== 0" class="muted" style="font-size: 0.8125rem">
               moved {{ Math.abs(image.drift) }} {{ image.drift > 0 ? 'up' : 'down' }}
             </span>
+            <!-- Moves the agreed order directly, the same list reorder()
+                 always accepted — a swap with the neighbour, resubmitted
+                 whole, same as any other change to this order. -->
+            <div v-if="!isFinalized" class="row" style="gap: 0.125rem">
+              <CdxButton
+                weight="quiet"
+                :disabled="busy || index === 0"
+                aria-label="Move up"
+                @click="moveImage(index, -1)"
+              >
+                <CdxIcon :icon="cdxIconArrowUp" />
+              </CdxButton>
+              <CdxButton
+                weight="quiet"
+                :disabled="busy || index === images.length - 1"
+                aria-label="Move down"
+                @click="moveImage(index, 1)"
+              >
+                <CdxIcon :icon="cdxIconArrowDown" />
+              </CdxButton>
+            </div>
             <CdxButton
               weight="quiet"
               @click="router.push({ name: 'meeting-image', params: { id, imageId: image.imageId } })"
@@ -315,32 +319,5 @@ function onMatrixUpdated(updated) {
         </div>
       </div>
     </div>
-
-    <!-- This juror's own proposed ranking -->
-    <CdxDialog
-      v-model:open="proposeOpen"
-      title="My proposed ranking"
-      subtitle="Your ranking is recorded separately, so disagreements stay visible"
-      :primary-action="{ label: 'Submit my ranking', actionType: 'progressive', disabled: busy }"
-      :default-action="{ label: 'Cancel' }"
-      @primary="submitProposal"
-      @default="proposeOpen = false"
-    >
-      <div class="stack" style="gap: 0.5rem">
-        <div v-for="(entry, index) in myOrder" :key="entry.imageId" class="row propose-row">
-          <img :src="entry.thumbUrl" :alt="entry.title" class="propose-thumb" />
-          <span class="muted propose-title">{{ entry.title }}</span>
-          <CdxTextInput
-            :model-value="entry.myRank"
-            input-type="number"
-            min="1"
-            :max="myOrder.length"
-            :aria-label="`My rank for ${entry.title}`"
-            style="max-width: 5rem"
-            @update:model-value="applyRank(index, $event)"
-          />
-        </div>
-      </div>
-    </CdxDialog>
   </template>
 </template>
