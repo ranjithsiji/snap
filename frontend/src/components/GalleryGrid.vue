@@ -33,7 +33,7 @@ function pick(image) {
   emit('open-single', image)
 }
 
-const PAGE_SIZE = 60
+const PAGE_SIZE = 25
 
 const filter = ref('unrated')
 const images = ref([])

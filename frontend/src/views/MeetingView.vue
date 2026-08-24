@@ -364,7 +364,7 @@ function lightboxStep(direction) {
 
       <div v-if="rankingView === 'list'" class="stack">
         <div v-for="(image, index) in images" :key="image.imageId" class="card meeting-row">
-          <img :src="image.thumbUrl" :alt="image.title" class="meeting-thumb" />
+          <img :src="image.thumbUrl" :alt="image.title" class="meeting-thumb" loading="lazy" />
 
           <div class="meeting-body">
             <div class="row wrap">
