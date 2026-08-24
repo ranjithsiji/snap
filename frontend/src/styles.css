@@ -1413,6 +1413,20 @@ body {
   opacity: 0.55;
 }
 
+/* A clear, distinct border around the dialog: creating a follow-up round
+   commits a whole new set of images to a whole new round, and the
+   screen it happens on should look unmistakably like its own space
+   rather than blending into an ordinary form dialog. */
+.derive-dialog .cdx-dialog {
+  border: 2px solid var(--border-color-progressive);
+}
+
+.derive-count {
+  font-size: var(--font-size-small);
+  color: var(--color-subtle);
+  white-space: nowrap;
+}
+
 .role-scope-link {
   display: block;
   margin-top: var(--spacing-25);

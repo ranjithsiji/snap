@@ -88,6 +88,52 @@ async function runImport() {
 const deriveOpen = ref(false)
 const derive = ref({ name: '', minAcceptCount: '', minAverageScore: '', topN: '' })
 const derivePreview = ref(null)
+const derivePreviewLoading = ref(false)
+
+// A plain sentence rather than a bare number, so what the count answers
+// is never ambiguous — "how many images meet this cutoff", not a stray
+// figure floating next to a text field.
+const derivePreviewText = computed(() => {
+  if (derivePreviewLoading.value) return 'Checking…'
+  if (derivePreview.value === null) return ''
+
+  const count = derivePreview.value.count
+
+  return `${formatNumber(count)} image${count === 1 ? '' : 's'} would carry over`
+})
+
+/** Opens the dialog with a fresh count for the criteria it starts with. */
+function openDerive() {
+  derive.value = { name: '', minAcceptCount: '', minAverageScore: '', topN: '' }
+  derivePreview.value = null
+  deriveOpen.value = true
+  previewDerivation()
+}
+
+const meetingOpen = ref(false)
+const meeting = ref({ name: '', topN: '' })
+
+async function submitMeeting() {
+  busy.value = true
+  error.value = null
+
+  try {
+    const body = { name: meeting.value.name || undefined }
+
+    if (meeting.value.topN !== '') {
+      body.topN = Number(meeting.value.topN)
+    }
+
+    const data = await api.post(`/rounds/${props.id}/meeting`, body)
+
+    meetingOpen.value = false
+    router.push({ name: 'meeting', params: { id: data.round.id } })
+  } catch (e) {
+    error.value = e.message
+  } finally {
+    busy.value = false
+  }
+}
 
 const replaceOpen = ref(false)
 const replaceTarget = ref(null)
@@ -196,13 +242,29 @@ function deriveCriteria() {
   return criteria
 }
 
+let previewDebounce = null
+
+/**
+ * Runs on a pause after typing rather than on every keystroke: the count
+ * this shows is a live answer to "how many images meet this?", so it has
+ * to follow what is currently typed — but querying on every digit would
+ * fire far more requests than the number actually changes.
+ */
 async function previewDerivation() {
-  try {
-    const data = await api.post(`/rounds/${props.id}/derive/preview`, deriveCriteria())
-    derivePreview.value = data
-  } catch (e) {
-    error.value = e.message
-  }
+  clearTimeout(previewDebounce)
+  derivePreviewLoading.value = true
+
+  previewDebounce = setTimeout(async () => {
+    try {
+      derivePreview.value = await api.post(`/rounds/${props.id}/derive/preview`, deriveCriteria())
+    } catch (e) {
+      // A criterion that is still mid-typing (e.g. a bare ".") must not
+      // block the field — the count simply does not update for it.
+      derivePreview.value = null
+    } finally {
+      derivePreviewLoading.value = false
+    }
+  }, 350)
 }
 
 async function submitDerivation() {
@@ -302,13 +364,24 @@ async function submitDerivation() {
         <CdxButton @click="download('csv')">Download results</CdxButton>
         <CdxButton @click="download('txt')">Download entries</CdxButton>
 
+        <!-- Neither of these applies once the round itself is the meeting
+             — it is the last step, and the server refuses both anyway. -->
         <CdxButton
-          v-if="round.state === 'finalized'"
+          v-if="round.state === 'finalized' && round.votingMethod !== 'meeting'"
           action="progressive"
           weight="primary"
-          @click="deriveOpen = true"
+          @click="openDerive"
         >
           Create next round
+        </CdxButton>
+
+        <CdxButton
+          v-if="round.state === 'finalized' && round.votingMethod !== 'meeting'"
+          action="progressive"
+          weight="primary"
+          @click="meetingOpen = true"
+        >
+          Open jury meeting
         </CdxButton>
       </div>
     </div>
@@ -555,6 +628,7 @@ async function submitDerivation() {
 
     <CdxDialog
       v-model:open="deriveOpen"
+      class="derive-dialog"
       title="Create next round"
       subtitle="Carry forward the images that met your criteria"
       :primary-action="{ label: 'Create round', actionType: 'progressive', disabled: busy }"
@@ -567,29 +641,78 @@ async function submitDerivation() {
         <CdxTextInput v-model="derive.name" placeholder="Round 2" />
       </CdxField>
 
+      <!-- The count follows whatever is currently typed, right beside the
+           field that controls it — a coordinator can feel out the cutoff
+           by precision rather than picking from a fixed list of options,
+           and always knows exactly what a given number produces before
+           committing to it. -->
       <CdxField v-if="round.votingMethod === 'yesno'">
         <template #label>Minimum accept votes</template>
         <template #description>Keep images at least this many jurors accepted.</template>
-        <CdxTextInput v-model="derive.minAcceptCount" input-type="number" min="1" />
+        <div class="row" style="gap: 0.5rem; align-items: center">
+          <CdxTextInput
+            v-model="derive.minAcceptCount"
+            input-type="number"
+            min="1"
+            @update:model-value="previewDerivation"
+          />
+          <span class="derive-count">{{ derivePreviewText }}</span>
+        </div>
       </CdxField>
 
       <CdxField v-else>
         <template #label>Minimum average score</template>
-        <CdxTextInput v-model="derive.minAverageScore" input-type="number" step="0.1" />
+        <div class="row" style="gap: 0.5rem; align-items: center">
+          <CdxTextInput
+            v-model="derive.minAverageScore"
+            input-type="number"
+            step="0.1"
+            @update:model-value="previewDerivation"
+          />
+          <span class="derive-count">{{ derivePreviewText }}</span>
+        </div>
       </CdxField>
 
       <CdxField>
         <template #label>Keep only the top N</template>
         <template #description>Leave blank to keep everything that met the criteria.</template>
-        <CdxTextInput v-model="derive.topN" input-type="number" min="1" />
+        <div class="row" style="gap: 0.5rem; align-items: center">
+          <CdxTextInput
+            v-model="derive.topN"
+            input-type="number"
+            min="1"
+            @update:model-value="previewDerivation"
+          />
+          <span class="derive-count">{{ derivePreviewText }}</span>
+        </div>
+      </CdxField>
+    </CdxDialog>
+
+    <CdxDialog
+      v-model:open="meetingOpen"
+      title="Open jury meeting"
+      subtitle="Where the jury discusses and settles the final result"
+      :primary-action="{ label: 'Open meeting', actionType: 'progressive', disabled: busy }"
+      :default-action="{ label: 'Cancel' }"
+      @primary="submitMeeting"
+      @default="meetingOpen = false"
+    >
+      <p style="margin-top: 0" class="muted">
+        Every active juror from this round is carried over to the meeting, along with
+        its results.
+      </p>
+
+      <CdxField>
+        <template #label>Meeting name</template>
+        <template #description>Leave blank to name it after this round.</template>
+        <CdxTextInput v-model="meeting.name" :placeholder="`${round.name} — final meeting`" />
       </CdxField>
 
-      <CdxButton @click="previewDerivation">Preview selection</CdxButton>
-
-      <CdxMessage v-if="derivePreview" type="notice" style="margin-top: 0.75rem">
-        {{ formatNumber(derivePreview.count) }} image(s) would carry over
-        ({{ derivePreview.criteria }}).
-      </CdxMessage>
+      <CdxField>
+        <template #label>Discuss only the top N</template>
+        <template #description>Leave blank to bring every result into the meeting.</template>
+        <CdxTextInput v-model="meeting.topN" input-type="number" min="1" />
+      </CdxField>
     </CdxDialog>
 
     <CdxDialog
