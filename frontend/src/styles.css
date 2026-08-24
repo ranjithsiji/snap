@@ -231,14 +231,18 @@ body {
   border-bottom-color: var(--snap-periwinkle);
 }
 
-/* Quiet buttons default to dark text, which disappears on the navy bar. */
+/* Quiet buttons default to dark text on a light fill, which washes out
+   against the navy bar. A translucent white fill and border instead,
+   so these still read as buttons rather than plain text on the bar. */
 .topbar .bar-button {
-  color: rgba(255, 255, 255, 0.85);
+  color: #fff;
+  background-color: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.4);
 }
 
-.topbar .bar-button:hover {
+.topbar .bar-button:hover:not(:disabled) {
   color: #fff;
-  background-color: rgba(255, 255, 255, 0.1);
+  background-color: rgba(255, 255, 255, 0.22);
 }
 
 .topbar-user {
@@ -273,7 +277,7 @@ body {
   width: 100%;
   margin-top: var(--spacing-200);
   padding: var(--spacing-125) max(var(--spacing-150), calc((100% - 75rem) / 2));
-  background-color: var(--snap-bar);
+  background-color: #545454;
   border-top: 0;
   font-size: var(--font-size-small);
   color: rgba(255, 255, 255, 0.72);
@@ -309,17 +313,21 @@ body {
    labelled action (move up/down, "View & discuss", view-switchers) it
    reads as bold plain text instead of something clickable. Giving every
    quiet button the same border normal buttons have fixes that without
-   touching the ~50 call sites individually. */
-.cdx-button--weight-quiet {
+   touching the ~50 call sites individually.
+
+   Excludes .topbar: a solid light background there washed the buttons
+   out against the bar's own blue — .bar-button below styles those to
+   match the bar instead. */
+.cdx-button--weight-quiet:not(.topbar *) {
   border: 1px solid var(--border-color-base, #a2a9b1) !important;
   background-color: var(--background-color-base, #fff) !important;
 }
 
-.cdx-button--weight-quiet:hover:not(:disabled) {
+.cdx-button--weight-quiet:not(.topbar *):hover:not(:disabled) {
   background-color: var(--background-color-interactive-subtle, #f8f9fa) !important;
 }
 
-.cdx-button--weight-quiet:disabled {
+.cdx-button--weight-quiet:not(.topbar *):disabled {
   border-color: var(--border-color-disabled, #c8ccd1) !important;
 }
 
@@ -929,7 +937,8 @@ body {
 /* Marks the tile a juror picked to open in single-image view, so it is
    still identifiable after they return to the grid. */
 .gallery-tile.is-picked {
-  border-color: var(--color-warning);
+  border-color: #ffd500;
+  box-shadow: 0 0 0 2px #ffd500;
 }
 
 .gallery-tile img {
@@ -1113,14 +1122,14 @@ body {
    tile elsewhere in the grid, so the tile itself briefly highlights
    after landing on its new spot rather than just silently moving. */
 .meeting-gallery-tile.is-just-moved {
-  border-color: var(--border-color-progressive, #6485d1);
-  box-shadow: 0 0 0 2px var(--border-color-progressive, #6485d1);
+  border-color: #ffd500;
+  box-shadow: 0 0 0 2px #ffd500;
   animation: meeting-gallery-flash 1.5s ease-out;
 }
 
 @keyframes meeting-gallery-flash {
   0% {
-    background-color: var(--background-color-progressive-subtle, #eaf3ff);
+    background-color: rgba(255, 213, 0, 0.25);
   }
   100% {
     background-color: transparent;
