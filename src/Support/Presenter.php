@@ -197,9 +197,15 @@ final class Presenter
                 : ($thumb ?? $image->getFileUrl()),
             // A grid tile needs far less than the voting stage does.
             'gridUrl' => self::resizeThumb($thumb, 480) ?? $thumb,
-            // The full-size original, for the "Show full-size" action. This
-            // is the same file the thumbnail derives from, so it reveals
-            // nothing the juror cannot already see.
+            // Sized for the lightbox: large enough that judging a detail
+            // is no different from the original, without the full-size
+            // file's own weight — some Commons uploads run tens of
+            // megabytes, which made opening the lightbox itself the slow
+            // step.
+            'lightboxUrl' => self::resizeThumb($thumb, 1920) ?? $image->getFileUrl(),
+            // The full-size original, for the "Open the original file"
+            // action. This is the same file the thumbnail derives from, so
+            // it reveals nothing the juror cannot already see.
             'fileUrl' => $image->getFileUrl(),
         ];
 

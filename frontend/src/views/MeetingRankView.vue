@@ -252,7 +252,11 @@ async function submit() {
 
   <!-- Detailed view of one image without leaving the grid. -->
   <div v-if="lightbox" class="lightbox" @click="lightbox = null">
-    <img class="lightbox-image" :src="lightbox.fileUrl ?? lightbox.thumbUrl" :alt="lightbox.title" />
+    <img
+      class="lightbox-image"
+      :src="lightbox.lightboxUrl ?? lightbox.fileUrl ?? lightbox.thumbUrl"
+      :alt="lightbox.title"
+    />
     <button
       type="button"
       class="lightbox-restore"

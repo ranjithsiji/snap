@@ -69,6 +69,17 @@ const rankingView = ref(
 const lightbox = ref(null)
 const lightboxDetailsOpen = ref(true)
 
+// True from opening/stepping to a new image until it has actually
+// loaded — Prev/Next jump straight to the next photo, and without this
+// the previous image stayed on screen unchanged while the new one
+// fetched.
+const lightboxLoading = ref(false)
+
+function openLightbox(image) {
+  lightboxLoading.value = true
+  lightbox.value = image
+}
+
 // Paged at 25, same cap as the per-image discuss screen's own strip —
 // a meeting can carry over far more images than a strip that size can
 // usefully show at once.
@@ -252,7 +263,7 @@ const lightboxIndex = computed(() =>
 function lightboxStep(direction) {
   const next = images.value[lightboxIndex.value + direction]
 
-  if (next) lightbox.value = next
+  if (next) openLightbox(next)
 }
 </script>
 
@@ -429,7 +440,7 @@ function lightboxStep(direction) {
             type="button"
             class="tile-action tile-zoom"
             aria-label="View larger"
-            @click="lightbox = image"
+            @click="openLightbox(image)"
           >
             ⤢
           </button>
@@ -540,7 +551,16 @@ function lightboxStep(direction) {
 
   <!-- Detailed view of one image without leaving the grid. -->
   <div v-if="lightbox" class="lightbox" @click="lightbox = null">
-    <img class="lightbox-image" :src="lightbox.fileUrl ?? lightbox.thumbUrl" :alt="lightbox.title" />
+    <CdxProgressBar v-if="lightboxLoading" class="lightbox-progress" aria-label="Loading image" />
+
+    <img
+      v-show="!lightboxLoading"
+      class="lightbox-image"
+      :src="lightbox.lightboxUrl ?? lightbox.fileUrl ?? lightbox.thumbUrl"
+      :alt="lightbox.title"
+      @load="lightboxLoading = false"
+      @error="lightboxLoading = false"
+    />
 
     <aside v-if="lightboxDetailsOpen" class="lightbox-panel" @click.stop>
       <div class="row lightbox-panel-head">

@@ -49,6 +49,17 @@ const lightbox = ref(null)
 // would be the opposite of what dismissing it meant.
 const lightboxDetailsOpen = ref(true)
 
+// True from the moment the lightbox switches to a new image until that
+// image has actually loaded — voting jumps straight to the next photo,
+// and without this the old image stayed on screen while the new one
+// fetched, making a vote look like it did nothing.
+const lightboxLoading = ref(false)
+
+function openLightbox(image) {
+  lightboxLoading.value = true
+  lightbox.value = image
+}
+
 const isYesNo = computed(() => props.round.votingMethod === 'yesno')
 const stars = computed(() => Array.from({ length: props.round.maxRating ?? 5 }, (_, i) => i + 1))
 const pageCount = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)))
@@ -134,7 +145,10 @@ async function vote(image, score) {
       // rather than leaving a juror staring at a photo no longer in the
       // grid behind it, closing only once there is nothing left to show.
       if (lightbox.value?.id === image.id) {
-        lightbox.value = images.value[removedIndex] ?? images.value[removedIndex - 1] ?? null
+        const next = images.value[removedIndex] ?? images.value[removedIndex - 1] ?? null
+
+        if (next) openLightbox(next)
+        else lightbox.value = null
       }
     }
 
@@ -223,7 +237,7 @@ async function toggleFavorite(image) {
           type="button"
           class="tile-action tile-zoom"
           aria-label="View larger"
-          @click="lightbox = image"
+          @click="openLightbox(image)"
         >
           ⤢
         </button>
@@ -298,10 +312,15 @@ async function toggleFavorite(image) {
        peeking — the full image and its facts on one screen, without the
        trip out to single-image view. -->
   <div v-if="lightbox" class="lightbox" @click="lightbox = null">
+    <CdxProgressBar v-if="lightboxLoading" class="lightbox-progress" aria-label="Loading image" />
+
     <img
+      v-show="!lightboxLoading"
       class="lightbox-image"
-      :src="lightbox.fileUrl ?? lightbox.thumbUrl"
+      :src="lightbox.lightboxUrl ?? lightbox.fileUrl ?? lightbox.thumbUrl"
       :alt="lightbox.name ?? 'Contest image'"
+      @load="lightboxLoading = false"
+      @error="lightboxLoading = false"
     />
 
     <aside

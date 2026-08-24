@@ -1186,6 +1186,14 @@ body {
   cursor: default;
 }
 
+/* Stands in for the image while it loads — voting jumps straight to
+   the next photo, and without this the previous image stayed on
+   screen looking unchanged while the new one was still fetching. */
+.lightbox-progress {
+  flex: 1;
+  max-width: 20rem;
+}
+
 /* A dedicated grey panel rather than the dark backdrop showing through:
    the same reasoning as the single-image view's sidebar — facts read
    better against a surface than floating over whatever the photograph

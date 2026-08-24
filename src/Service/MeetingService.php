@@ -18,6 +18,7 @@ use JuryTool\Domain\Enum\RoundState;
 use JuryTool\Domain\Enum\UserRole;
 use JuryTool\Domain\Enum\VotingMethod;
 use JuryTool\Support\DomainException;
+use JuryTool\Support\Presenter;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -152,6 +153,11 @@ class MeetingService
                 'imageId' => $rank->getImage()->getId(),
                 'title' => $rank->getImage()->getDisplayName(),
                 'thumbUrl' => $rank->getImage()->getThumbUrl(),
+                // Sized for the lightbox, not the full original — the same
+                // reasoning as the round gallery's own lightbox: judging a
+                // detail needs resolution, not every byte of the upload.
+                'lightboxUrl' => Presenter::resizeThumb($rank->getImage()->getThumbUrl(), 1920)
+                    ?? $rank->getImage()->getFileUrl(),
                 'fileUrl' => $rank->getImage()->getFileUrl(),
                 'descriptionUrl' => $rank->getImage()->getDescriptionUrl(),
                 'width' => $rank->getImage()->getWidth(),

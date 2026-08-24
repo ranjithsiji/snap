@@ -340,7 +340,7 @@ async function postComment() {
       </div>
 
       <div class="meeting-image-frame">
-        <img :src="current.fileUrl ?? current.thumbUrl" :alt="current.title" />
+        <img :src="current.lightboxUrl ?? current.fileUrl ?? current.thumbUrl" :alt="current.title" />
       </div>
 
       <div class="row wrap meeting-image-links">
