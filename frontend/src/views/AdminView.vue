@@ -1,8 +1,10 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { cdxIconAdd, cdxIconTrash } from '@wikimedia/codex-icons'
 import {
   CdxButton,
+  CdxIcon,
   CdxDialog,
   CdxField,
   CdxInfoChip,
@@ -452,7 +454,7 @@ async function createUser() {
             :disabled="busy"
             @click="pendingDelete = { kind: 'project', item: row }"
           >
-            Delete
+            <CdxIcon :icon="cdxIconTrash" /> Delete
           </CdxButton>
         </template>
       </DataTable>
@@ -481,7 +483,7 @@ async function createUser() {
             :disabled="busy"
             @click="pendingDelete = { kind: 'campaign', item: row }"
           >
-            Delete
+            <CdxIcon :icon="cdxIconTrash" /> Delete
           </CdxButton>
         </template>
       </DataTable>
@@ -512,7 +514,7 @@ async function createUser() {
             :disabled="busy"
             @click="pendingDelete = { kind: 'round', item: row }"
           >
-            Delete
+            <CdxIcon :icon="cdxIconTrash" /> Delete
           </CdxButton>
         </template>
       </DataTable>

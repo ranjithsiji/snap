@@ -1,6 +1,7 @@
 <script setup>
 import { RouterLink } from 'vue-router'
-import { CdxButton } from '@wikimedia/codex'
+import { CdxButton, CdxIcon } from '@wikimedia/codex'
+import { cdxIconImageGallery, cdxIconLogIn } from '@wikimedia/codex-icons'
 import { useSession } from '@/stores/session'
 
 const session = useSession()
@@ -41,43 +42,69 @@ const does = [
 
 <template>
   <div class="landing">
+    <!-- Two columns: the claim on the left, and on the right a sketch of
+         what judging actually looks like. A tool for looking at
+         photographs should show one before asking anyone to sign in. -->
     <section class="hero">
-      <img src="/logo.svg" alt="" class="hero-logo" width="160" height="160" />
+      <div class="hero-text">
+        <img src="/logo.svg" alt="" class="hero-logo" width="72" height="72" />
 
-      <h1 class="hero-title">Snap</h1>
-      <p class="hero-tagline">Judging for Wiki Loves photography campaigns</p>
+        <h1 class="hero-title">Judging for Wiki&nbsp;Loves campaigns</h1>
 
-      <p class="hero-lede">
-        From a Commons category to a final result — importing the entries,
-        sharing them fairly among the jury, and collecting the votes round
-        by round.
-      </p>
+        <p class="hero-lede">
+          From a Commons category to a final result — importing the entries,
+          sharing them fairly among the jury, and collecting the votes round
+          by round.
+        </p>
 
-      <div class="hero-actions">
-        <!-- Signed in, the useful destination is the juror's own work
-             rather than this page. -->
-        <CdxButton
-          v-if="session.isAuthenticated"
-          action="progressive"
-          weight="primary"
-          size="large"
-          @click="$router.push({ name: 'my-rounds' })"
-        >
-          Go to my rounds
-        </CdxButton>
-        <CdxButton
-          v-else
-          action="progressive"
-          weight="primary"
-          size="large"
-          @click="$router.push({ name: 'login' })"
-        >
-          Sign in
-        </CdxButton>
+        <div class="hero-actions">
+          <!-- Signed in, the useful destination is the juror's own work
+               rather than this page. -->
+          <CdxButton
+            v-if="session.isAuthenticated"
+            action="progressive"
+            weight="primary"
+            size="large"
+            @click="$router.push({ name: 'my-rounds' })"
+          >
+            <CdxIcon :icon="cdxIconImageGallery" /> Go to my rounds
+          </CdxButton>
+          <CdxButton
+            v-else
+            action="progressive"
+            weight="primary"
+            size="large"
+            @click="$router.push({ name: 'login' })"
+          >
+            <CdxIcon :icon="cdxIconLogIn" /> Sign in
+          </CdxButton>
 
-        <CdxButton size="large" @click="$router.push({ name: 'about' })">
-          About Snap
-        </CdxButton>
+          <CdxButton size="large" @click="$router.push({ name: 'about' })">
+            About Snap
+          </CdxButton>
+        </div>
+      </div>
+
+      <!-- A still of the voting screen, drawn rather than screenshotted so
+           it needs no real photographs and stays true after redesigns. -->
+      <div class="hero-panel" aria-hidden="true">
+        <div class="panel-bar">
+          <span class="panel-dot"></span>
+          <span class="panel-dot"></span>
+          <span class="panel-dot"></span>
+          <span class="panel-title">Round 2 · Rating</span>
+        </div>
+
+        <div class="panel-grid">
+          <div v-for="n in 6" :key="n" class="panel-tile" :class="`tile-${n}`">
+            <span class="panel-stars">{{ '★'.repeat(((n * 2) % 3) + 3) }}</span>
+          </div>
+        </div>
+
+        <div class="panel-foot">
+          <span>1,248 of 6,658 judged</span>
+          <span class="panel-meter"><span :style="{ width: '19%' }"></span></span>
+        </div>
       </div>
     </section>
 
@@ -130,39 +157,49 @@ const does = [
 
 /* --- Hero ------------------------------------------------------------ */
 
+/* Two columns on a desktop, stacked below. The text column is narrower
+   than the panel so the claim stays readable rather than stretching. */
 .hero {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
   align-items: center;
-  text-align: center;
-  max-width: 46rem;
-  margin: 0 auto;
+  gap: var(--spacing-200);
   padding: var(--spacing-200) 0 var(--spacing-150);
 }
 
+@media (max-width: 60rem) {
+  .hero {
+    grid-template-columns: 1fr;
+    text-align: center;
+    padding-top: var(--spacing-150);
+  }
+
+  .hero-text {
+    justify-items: center;
+  }
+
+  .hero-actions {
+    justify-content: center;
+  }
+}
+
 .hero-logo {
-  width: 10rem;
-  max-width: 45vw;
+  width: 4.5rem;
   height: auto;
-  margin-bottom: var(--spacing-125);
+  margin-bottom: var(--spacing-100);
 }
 
 .hero-title {
-  margin: 0;
-  font-size: 2.75rem;
+  margin: 0 0 var(--spacing-75);
+  font-size: clamp(2rem, 4vw, 3rem);
   font-weight: var(--font-weight-bold);
   line-height: 1.1;
-}
-
-.hero-tagline {
-  margin: var(--spacing-25) 0 var(--spacing-100);
-  font-size: var(--font-size-x-large);
-  color: var(--color-subtle);
+  letter-spacing: -0.02em;
 }
 
 .hero-lede {
   margin: 0 0 var(--spacing-150);
-  max-width: 34rem;
+  max-width: 32rem;
   font-size: var(--font-size-large);
   line-height: var(--line-height-medium);
   color: var(--color-subtle);
@@ -171,8 +208,90 @@ const does = [
 .hero-actions {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
   gap: var(--spacing-75);
+}
+
+/* --- Hero panel ------------------------------------------------------ */
+
+.hero-panel {
+  border-radius: 12px;
+  overflow: hidden;
+  background-color: var(--snap-navy);
+  box-shadow: 0 12px 32px var(--snap-shadow), 0 2px 8px var(--snap-shadow);
+}
+
+.panel-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-25);
+  padding: var(--spacing-50) var(--spacing-75);
+  background-color: rgba(0, 0, 0, 0.25);
+}
+
+.panel-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: var(--border-radius-circle);
+  background-color: rgba(255, 255, 255, 0.25);
+}
+
+.panel-title {
+  margin-left: var(--spacing-50);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: var(--font-size-x-small);
+}
+
+.panel-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--spacing-50);
+  padding: var(--spacing-75);
+}
+
+/* Stand-ins for photographs: tinted blocks, so the panel needs no real
+   images and cannot misrepresent anyone's work. */
+.panel-tile {
+  aspect-ratio: 4 / 3;
+  border-radius: 6px;
+  display: flex;
+  align-items: flex-end;
+  padding: var(--spacing-25);
+  background: linear-gradient(140deg, #2b4a8f, #1b2360);
+}
+
+.tile-2 { background: linear-gradient(140deg, #3f5aa6, #232a6b); }
+.tile-3 { background: linear-gradient(140deg, #24427f, #141c50); }
+.tile-4 { background: linear-gradient(140deg, #35508f, #1d2560); }
+.tile-5 { background: linear-gradient(140deg, #4a63b0, #263070); }
+.tile-6 { background: linear-gradient(140deg, #1f3a72, #121a4a); }
+
+.panel-stars {
+  font-size: 0.625rem;
+  color: var(--snap-periwinkle);
+  letter-spacing: 0.05em;
+}
+
+.panel-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-75);
+  padding: var(--spacing-50) var(--spacing-75) var(--spacing-75);
+  color: rgba(255, 255, 255, 0.65);
+  font-size: var(--font-size-x-small);
+}
+
+.panel-meter {
+  flex: 1;
+  height: 0.25rem;
+  border-radius: var(--border-radius-pill);
+  background-color: rgba(255, 255, 255, 0.15);
+  overflow: hidden;
+}
+
+.panel-meter span {
+  display: block;
+  height: 100%;
+  background-color: var(--snap-periwinkle);
 }
 
 /* --- About ----------------------------------------------------------- */

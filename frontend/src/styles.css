@@ -11,6 +11,109 @@
 @import '@wikimedia/codex-design-tokens/theme-wikimedia-ui.css';
 @import '@wikimedia/codex/dist/codex.style.css';
 
+/* --- Snap's own colours ----------------------------------------------
+   Codex out of the box is the same interface every Wikimedia tool has,
+   which is right for a MediaWiki gadget and wrong for a tool people
+   spend hours inside — montage and wlxjury already look like this, and
+   Snap was indistinguishable from them.
+
+   Rather than adopt a second framework, the design tokens Codex is
+   written in are retinted. Every component follows automatically,
+   because they all resolve their colour through these variables, and
+   nothing about Codex's behaviour or accessibility work is disturbed.
+
+   The palette is the logo's: the deep navy of the lens and the
+   periwinkle of the surround. */
+:root {
+  --snap-navy: #141755;
+  --snap-navy-dark: #0d0f3d;
+  --snap-blue: #264c9c;
+  --snap-periwinkle: #c5cdf2;
+  --snap-periwinkle-soft: #eef1fb;
+  --snap-paper: #fbfcfe;
+
+  /* Interactive colour. Codex resolves buttons, links, focus rings and
+     selected states through these. */
+  --color-progressive: var(--snap-navy);
+  --color-progressive--hover: var(--snap-blue);
+  --color-progressive--active: var(--snap-navy-dark);
+  --color-progressive--focus: var(--snap-navy);
+  --background-color-progressive: var(--snap-navy);
+  --background-color-progressive--hover: var(--snap-blue);
+  --background-color-progressive--active: var(--snap-navy-dark);
+  --background-color-progressive-subtle: var(--snap-periwinkle-soft);
+  --border-color-progressive: var(--snap-navy);
+
+  --color-link: var(--snap-blue);
+  --color-link--visited: #5a4a8a;
+
+  /* Surfaces: a warm off-white page under white cards, rather than
+     Codex's grey-on-grey. */
+  --background-color-neutral-subtle: var(--snap-paper);
+  --border-color-base: #d4d9e8;
+  --border-color-subtle: #e6e9f4;
+
+  --snap-shadow: rgba(20, 23, 85, 0.06);
+  --snap-bar: var(--snap-navy);
+}
+
+/* --- Dark mode --------------------------------------------------------
+   Judging photographs is what the tool is for, and a dark surround is
+   the conventional choice for looking at images — a light page throws
+   its own cast over every thumbnail. The admin screens are dense text
+   where light reads better, so this is the viewer's choice, applied by
+   the theme store on the root element.
+
+   Only the tokens change. Every Codex component and every rule below
+   follows from them, so there is no second set of styles to keep in
+   step. */
+:root[data-theme='dark'] {
+  --snap-ink: #e8eaf5;
+
+  --color-base: var(--snap-ink);
+  --color-emphasized: #f6f7fc;
+  --color-subtle: #a8adc9;
+  --color-placeholder: #7f85a6;
+  --color-inverted: #0b0d24;
+
+  --background-color-base: #171a3a;
+  --background-color-neutral-subtle: #0f1230;
+  --background-color-neutral: #1e2246;
+  --background-color-interactive: #232752;
+  --background-color-interactive-subtle: #1b1f42;
+
+  --border-color-base: #2e3363;
+  --border-color-subtle: #262a55;
+  --border-color-interactive: #3a3f75;
+
+  /* Periwinkle rather than navy: the navy that carries interactive
+     colour in light mode is the background here, so it would vanish. */
+  --color-progressive: var(--snap-periwinkle);
+  --color-progressive--hover: #dfe4f8;
+  --color-progressive--active: #b3bdec;
+  --color-progressive--focus: var(--snap-periwinkle);
+  --background-color-progressive: #3d4a9e;
+  --background-color-progressive--hover: #4a58b5;
+  --background-color-progressive--active: #33409088;
+  --background-color-progressive-subtle: #1d2250;
+  --border-color-progressive: #4a58b5;
+
+  --color-link: var(--snap-periwinkle);
+  --color-link--visited: #b9a8e6;
+
+  /* Normal (non-progressive) buttons: Codex's defaults are tuned for a
+     light page and leave the label almost invisible on a dark one. */
+  --color-base--hover: #f6f7fc;
+  --background-color-interactive-subtle--hover: #262b58;
+  --background-color-interactive-subtle--active: #2f3468;
+  --border-color-base--hover: #3d4275;
+
+  --snap-shadow: rgba(0, 0, 0, 0.35);
+  /* The bar sits above the page rather than below it in tone, which is
+     what keeps it legible once the page itself is dark. */
+  --snap-bar: #0b0d24;
+}
+
 body {
   margin: 0;
   background-color: var(--background-color-neutral-subtle);
@@ -28,9 +131,10 @@ body {
   flex-direction: column;
 }
 
-/* Wraps rather than fixing a height: the bar carries the brand, up to
-   four links and the account controls, which do not fit on one line on a
-   phone. */
+/* A dark bar, so the tool is recognisable at a glance and the working
+   area below it reads as the page rather than as more chrome. It wraps
+   rather than fixing a height: the brand, up to four links and the
+   account controls do not fit on one line on a phone. */
 .topbar {
   display: flex;
   align-items: center;
@@ -38,8 +142,14 @@ body {
   flex-wrap: wrap;
   padding: var(--spacing-50) var(--spacing-150);
   min-height: 3.5rem;
-  background-color: var(--background-color-base);
-  border-bottom: var(--border-base);
+  background-color: var(--snap-bar);
+  border-bottom: 0;
+  box-shadow: 0 1px 3px var(--snap-shadow);
+}
+
+.topbar .brand,
+.topbar .topbar-user strong {
+  color: #fff;
 }
 
 .brand {
@@ -66,19 +176,31 @@ body {
 }
 
 .topnav a {
-  color: var(--color-subtle);
+  color: rgba(255, 255, 255, 0.75);
   text-decoration: none;
   padding: var(--spacing-25) 0;
   border-bottom: 2px solid transparent;
 }
 
 .topnav a:hover {
-  color: var(--color-base);
+  color: #fff;
 }
 
+/* The current page is marked in the logo's periwinkle, which is the one
+   colour that reads clearly against the navy. */
 .topnav a.router-link-active {
-  color: var(--color-progressive);
-  border-bottom-color: var(--color-progressive);
+  color: var(--snap-periwinkle);
+  border-bottom-color: var(--snap-periwinkle);
+}
+
+/* Quiet buttons default to dark text, which disappears on the navy bar. */
+.topbar .bar-button {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.topbar .bar-button:hover {
+  color: #fff;
+  background-color: rgba(255, 255, 255, 0.1);
 }
 
 .topbar-user {
@@ -129,11 +251,15 @@ body {
 
 /* --- Surfaces -------------------------------------------------------- */
 
+/* Cards sit on the page rather than being drawn on it: a soft shadow
+   and a slightly larger radius, so a list of them reads as objects
+   instead of a wireframe of boxes. */
 .card {
   background-color: var(--background-color-base);
-  border: var(--border-base);
-  border-radius: var(--border-radius-base);
+  border: 1px solid var(--border-color-subtle);
+  border-radius: 8px;
   padding: var(--spacing-150);
+  box-shadow: 0 1px 2px var(--snap-shadow), 0 1px 3px var(--snap-shadow);
 }
 
 .page-head {

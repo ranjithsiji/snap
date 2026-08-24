@@ -1,10 +1,13 @@
 <script setup>
 import { onMounted } from 'vue'
 import { RouterLink, RouterView, useRouter } from 'vue-router'
-import { CdxButton, CdxInfoChip } from '@wikimedia/codex'
+import { CdxButton, CdxIcon, CdxInfoChip } from '@wikimedia/codex'
+import { cdxIconBright, cdxIconLogIn, cdxIconLogOut, cdxIconMoon } from '@wikimedia/codex-icons'
 import { useSession } from '@/stores/session'
+import { useTheme } from '@/stores/theme'
 
 const session = useSession()
+const theme = useTheme()
 const router = useRouter()
 
 onMounted(() => {
@@ -38,18 +41,36 @@ async function logout() {
       <div v-if="session.isAuthenticated" class="topbar-user">
         <strong>{{ session.user.username }}</strong>
         <CdxInfoChip>{{ session.user.role }}</CdxInfoChip>
-        <CdxButton weight="quiet" @click="logout">Log out</CdxButton>
+        <CdxButton
+          weight="quiet"
+          class="bar-button"
+          :aria-label="theme.mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"
+          @click="theme.toggle()"
+        >
+          <CdxIcon :icon="theme.mode === 'dark' ? cdxIconBright : cdxIconMoon" />
+        </CdxButton>
+        <CdxButton weight="quiet" class="bar-button" @click="logout">
+          <CdxIcon :icon="cdxIconLogOut" /> Log out
+        </CdxButton>
       </div>
 
       <!-- Without this a signed-out visitor has no way in from the page
            they land on. -->
       <div v-else class="topbar-user">
         <CdxButton
+          weight="quiet"
+          class="bar-button"
+          :aria-label="theme.mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"
+          @click="theme.toggle()"
+        >
+          <CdxIcon :icon="theme.mode === 'dark' ? cdxIconBright : cdxIconMoon" />
+        </CdxButton>
+        <CdxButton
           action="progressive"
           weight="primary"
           @click="router.push({ name: 'login' })"
         >
-          Sign in
+          <CdxIcon :icon="cdxIconLogIn" /> Sign in
         </CdxButton>
       </div>
     </header>
