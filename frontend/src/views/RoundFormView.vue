@@ -28,6 +28,11 @@ const isEdit = computed(() => props.id !== null)
 const roundState = ref(null)
 const isActive = computed(() => roundState.value === 'active')
 
+// A round derived from an earlier one inherits that round's qualifying
+// images directly — it has no category of its own to import from, and
+// asking for one is a question that does not apply to it.
+const isContinuation = ref(false)
+
 const votingMethods = [
   { label: 'Yes/No', value: 'yesno' },
   { label: 'Rating', value: 'rating' },
@@ -98,6 +103,7 @@ onMounted(async () => {
     }
 
     roundState.value = round.state
+    isContinuation.value = round.isContinuation
     jurors.value = data.jurors.map((juror) => juror.username)
   } catch (e) {
     error.value = e.message
@@ -170,7 +176,14 @@ async function submit() {
           <CdxTextInput v-model="form.maxRating" input-type="number" min="2" max="10" />
         </CdxField>
 
-        <CdxField>
+        <!-- A continuation round inherits its images directly from the
+             round it was derived from — there is no category for it to
+             draw from, so the question does not apply. -->
+        <CdxMessage v-if="isContinuation" type="notice" inline style="margin-bottom: 1rem">
+          This round continues from a previous one and uses the images carried
+          forward from it — it has no Commons category of its own.
+        </CdxMessage>
+        <CdxField v-else>
           <template #label>Commons category</template>
           <template #description>
             The category this round draws its images from. Suggestions show
