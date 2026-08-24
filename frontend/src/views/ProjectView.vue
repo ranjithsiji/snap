@@ -5,11 +5,13 @@ import {
   CdxButton,
   CdxDialog,
   CdxField,
+  CdxIcon,
   CdxInfoChip,
   CdxMessage,
   CdxProgressBar,
   CdxTextInput,
 } from '@wikimedia/codex'
+import { cdxIconNext } from '@wikimedia/codex-icons'
 import CommonsLookup from '@/components/CommonsLookup.vue'
 import { api } from '@/api'
 import { formatNumber } from '@/format'
@@ -169,6 +171,12 @@ async function createCampaign() {
               <span class="spacer"></span>
               <CdxInfoChip v-if="c.year">{{ c.year }}</CdxInfoChip>
               <CdxInfoChip v-if="!c.importedAt" status="warning">not imported</CdxInfoChip>
+              <CdxButton
+                weight="quiet"
+                @click.stop="router.push({ name: 'campaign', params: { id: c.id } })"
+              >
+                View rounds <CdxIcon :icon="cdxIconNext" />
+              </CdxButton>
             </div>
           </div>
         </div>

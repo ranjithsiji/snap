@@ -5,12 +5,14 @@ import {
   CdxButton,
   CdxDialog,
   CdxField,
+  CdxIcon,
   CdxInfoChip,
   CdxMessage,
   CdxProgressBar,
   CdxTextArea,
   CdxTextInput,
 } from '@wikimedia/codex'
+import { cdxIconNext } from '@wikimedia/codex-icons'
 import CommonsLookup from '@/components/CommonsLookup.vue'
 import { api } from '@/api'
 import { formatNumber } from '@/format'
@@ -114,6 +116,15 @@ async function create() {
         <CdxInfoChip v-if="project.canManage" status="success">you lead this</CdxInfoChip>
         <CdxInfoChip v-if="!project.leads.length" status="warning">needs a lead</CdxInfoChip>
         <CdxInfoChip v-if="project.isArchived">archived</CdxInfoChip>
+
+        <!-- The whole card is clickable, but nothing said so — a button
+             makes it plain there is somewhere to go, and where. -->
+        <CdxButton
+          weight="quiet"
+          @click.stop="router.push({ name: 'project', params: { id: project.id } })"
+        >
+          View campaigns <CdxIcon :icon="cdxIconNext" />
+        </CdxButton>
       </div>
 
       <p v-if="project.description" class="muted" style="margin: 0.75rem 0 0; font-size: 0.875rem">

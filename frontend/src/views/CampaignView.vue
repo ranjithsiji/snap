@@ -9,7 +9,7 @@ import {
   CdxMessage,
   CdxProgressBar,
 } from '@wikimedia/codex'
-import { cdxIconEdit } from '@wikimedia/codex-icons'
+import { cdxIconEdit, cdxIconImageGallery, cdxIconNext } from '@wikimedia/codex-icons'
 import CommonsChipInput from '@/components/CommonsChipInput.vue'
 import { api } from '@/api'
 import { useSession } from '@/stores/session'
@@ -163,6 +163,23 @@ async function reimport() {
               <CdxInfoChip :status="round.state === 'active' ? 'success' : 'notice'">
                 {{ round.state }}
               </CdxInfoChip>
+              <!-- Judging only when there is judging to do; View round
+                   always, since the round's own page is where everything
+                   else about it — including activating it — happens. -->
+              <CdxButton
+                v-if="round.state === 'active'"
+                weight="quiet"
+                action="progressive"
+                @click.stop="router.push({ name: 'vote', params: { id: round.id } })"
+              >
+                <CdxIcon :icon="cdxIconImageGallery" /> Judge
+              </CdxButton>
+              <CdxButton
+                weight="quiet"
+                @click.stop="router.push({ name: 'round', params: { id: round.id } })"
+              >
+                View round <CdxIcon :icon="cdxIconNext" />
+              </CdxButton>
             </div>
           </div>
         </div>
