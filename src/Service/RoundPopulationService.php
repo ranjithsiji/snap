@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace JuryTool\Service;
 
+use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\ORM\EntityManagerInterface;
 use JuryTool\Domain\Entity\CampaignImage;
 use JuryTool\Domain\Entity\Round;
@@ -170,12 +171,17 @@ class RoundPopulationService
      */
     private function globalOrganizers(): array
     {
+        // The array type is stated rather than inferred: DBAL 4 requires an
+        // ArrayParameterType enum here, and inference has been seen to hand
+        // it the old integer constant instead — which aborts the import
+        // with a TypeError from deep inside ExpandArrayParameters.
         $rows = $this->em->createQuery(
             'SELECT u.username FROM ' . User::class . ' u WHERE u.role IN (:roles)'
-        )->setParameter('roles', [
-            UserRole::Organizer->value,
-            UserRole::Admin->value,
-        ])->getScalarResult();
+        )->setParameter(
+            'roles',
+            [UserRole::Organizer->value, UserRole::Admin->value],
+            ArrayParameterType::STRING,
+        )->getScalarResult();
 
         return array_map(static fn (array $row): string => (string) $row['username'], $rows);
     }

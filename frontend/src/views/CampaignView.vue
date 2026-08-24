@@ -116,8 +116,12 @@ async function reimport() {
 
     <CdxMessage v-if="error" type="error">{{ error }}</CdxMessage>
     <CdxMessage v-if="notice" type="success">{{ notice }}</CdxMessage>
-    <CdxMessage v-if="!campaign.importedAt" type="warning">
-      This campaign's images have not been imported yet. Re-import before creating a round.
+    <!-- Not a warning: a round names its own Commons category and imports
+         from it, so nothing here has to be imported first. The campaign
+         pool is only the fallback for a round left without a category. -->
+    <CdxMessage v-if="!campaign.importedAt" type="notice">
+      No campaign-wide image pool has been imported. Rounds import from their own
+      Commons category, so this is only needed for a round left without one.
     </CdxMessage>
 
     <div class="grid-2">

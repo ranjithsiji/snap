@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace JuryTool\Infrastructure\Commons;
 
 use DateTimeImmutable;
+use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\DriverManager;
+use Doctrine\DBAL\ParameterType;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -171,9 +173,13 @@ class ReplicaClient
                 $sql,
                 ['category' => $category, 'after' => $after, 'batch' => $batch],
                 [
-                    'category' => \PDO::PARAM_STR,
-                    'after' => \PDO::PARAM_INT,
-                    'batch' => \PDO::PARAM_INT,
+                    // DBAL 4 takes ParameterType enum cases here. The old
+                    // \PDO::PARAM_* constants are plain ints and are
+                    // rejected outright, which aborted every import before
+                    // its first file was read.
+                    'category' => ParameterType::STRING,
+                    'after' => ParameterType::INTEGER,
+                    'batch' => ParameterType::INTEGER,
                 ],
             )->fetchAllAssociative();
 
@@ -260,7 +266,7 @@ class ReplicaClient
         $rows = $this->connection()->executeQuery(
             $sql,
             ['titles' => $normalised],
-            ['titles' => \Doctrine\DBAL\ArrayParameterType::STRING],
+            ['titles' => ArrayParameterType::STRING],
         )->fetchAllAssociative();
 
         return array_values(array_filter(array_map(
