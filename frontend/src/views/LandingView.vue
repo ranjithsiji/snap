@@ -105,36 +105,18 @@ const does = [
     <section class="tech">
       <h2 class="tech-title">Technical details</h2>
 
-      <dl class="tech-facts">
-        <dt>Deployment</dt>
-        <dd>
-          Deployed on
-          <a href="https://wikitech.wikimedia.org/wiki/Portal:Toolforge">Wikimedia Toolforge</a>
-        </dd>
-
-        <dt>Interface</dt>
-        <dd>
-          Built with the
-          <a href="https://doc.wikimedia.org/codex/latest/">Codex</a>
-          design system
-        </dd>
-
-        <dt>Maintained by</dt>
-        <dd>
-          <a href="https://w.wiki/t9">Wikimedians of Kerala User Group</a>
-        </dd>
-
-        <dt>Developed by</dt>
-        <dd>
-          <a href="https://w.wiki/tN">Ranjithsiji</a>
-        </dd>
-
-        <dt>License</dt>
-        <dd>
-          <a href="https://www.gnu.org/licenses/gpl-3.0.html">GNU GPL v3.0</a>
-          or later
-        </dd>
-      </dl>
+      <p class="tech-prose">
+        Snap is deployed on
+        <a href="https://wikitech.wikimedia.org/wiki/Portal:Toolforge">Wikimedia Toolforge</a>
+        and built with the
+        <a href="https://doc.wikimedia.org/codex/latest/">Codex</a>
+        design system. It is maintained by the
+        <a href="https://w.wiki/t9">Wikimedians of Kerala User Group</a>
+        and developed by
+        <a href="https://w.wiki/tN">Ranjithsiji</a>, and released under the
+        <a href="https://www.gnu.org/licenses/gpl-3.0.html">GNU GPL v3.0</a>
+        or later.
+      </p>
     </section>
   </div>
 </template>
@@ -268,34 +250,13 @@ const does = [
   font-weight: var(--font-weight-bold);
 }
 
-/* A label column sized to its longest term, then the value taking the
-   rest of the width. */
-.tech-facts {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: var(--spacing-50) var(--spacing-125);
-  margin: 0;
-  font-size: var(--font-size-small);
-}
-
-.tech-facts dt {
-  font-weight: var(--font-weight-bold);
-}
-
-.tech-facts dd {
+/* Prose rather than a label/value grid: these are five short facts that
+   read as one sentence, and a definition list gave each its own row of
+   scaffolding for no gain. */
+.tech-prose {
+  max-width: 44rem;
   margin: 0;
   color: var(--color-subtle);
-}
-
-/* Stacked on a phone, where two columns leave the values too narrow. */
-@media (max-width: 36rem) {
-  .tech-facts {
-    grid-template-columns: 1fr;
-    gap: var(--spacing-25);
-  }
-
-  .tech-facts dd {
-    margin-bottom: var(--spacing-50);
-  }
+  line-height: var(--line-height-medium);
 }
 </style>
