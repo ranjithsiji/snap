@@ -129,6 +129,13 @@ return function (App $app): void {
             $admin->patch('/admin/users/{id}/role', [UserActions::class, 'setRole']);
             $admin->patch('/admin/users/{id}/active', [UserActions::class, 'setActive']);
             $admin->post('/admin/users/{id}/password', [UserActions::class, 'resetPassword']);
+
+            // Where a user's authority actually comes from: the role column
+            // is only a summary of these scoped grants.
+            $admin->get('/admin/users/{id}/roles', [UserActions::class, 'roles']);
+            $admin->post('/admin/users/{id}/roles', [UserActions::class, 'grantRole']);
+            $admin->delete('/admin/users/{id}/roles/{grantId}', [UserActions::class, 'revokeRole']);
+
             $admin->delete('/admin/users/{id}', [UserActions::class, 'delete']);
         })->add(RequireRole::admin($access));
     });

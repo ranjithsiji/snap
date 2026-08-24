@@ -56,7 +56,7 @@ const routes = [
     meta: { role: 'organizer' },
   },
   {
-    // Creating a campaign is an administrator's job, but a lead running
+    // Creating a campaign is an lead's job and running it
     // one needs to correct its name or source without waiting on them.
     path: '/campaigns/:id/edit',
     name: 'campaign-edit',

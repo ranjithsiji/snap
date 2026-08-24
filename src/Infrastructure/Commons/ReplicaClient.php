@@ -19,8 +19,13 @@ use Psr\Log\LoggerInterface;
  * page through the web API comes back from one SQL query in seconds, so
  * this is strongly preferred when the tool runs there.
  *
- * The replica has no thumbnail URLs — those are derived from the file name
- * and its MD5, exactly as MediaWiki does it.
+ * The replica has no thumbnail URLs, so they are built from Special:FilePath,
+ * which redirects to the current file regardless of which hash bucket it
+ * lives in. An earlier version computed that bucket by hand from the file
+ * name's MD5 and got it wrong — MediaWiki's actual rule is the MD5 of the
+ * DB-form title, not the display title — so every image 404'd. Redirecting
+ * through Special:FilePath is what mist does for the same reason: it costs
+ * one redirect instead of one bug per naming edge case.
  */
 class ReplicaClient
 {
@@ -332,33 +337,22 @@ class ReplicaClient
     }
 
     /**
-     * The upload path MediaWiki uses: two levels of directory taken from
-     * the MD5 of the file name.
+     * The original file, via the redirect MediaWiki itself exposes for
+     * this. This used to compute the upload path's hash-bucket directory
+     * by hand from the file name's MD5 — every file 404'd, because
+     * MediaWiki's rule is the MD5 of the DB-form title, and getting a
+     * derivation like that byte-exact is a standing invitation to drift.
+     * Special:FilePath resolves to wherever the file actually lives, so
+     * there is no bucket to get wrong.
      */
     private function fileUrl(string $title): string
     {
-        $hash = md5($title);
-
-        return sprintf(
-            'https://upload.wikimedia.org/wikipedia/commons/%s/%s/%s',
-            $hash[0],
-            substr($hash, 0, 2),
-            rawurlencode($title),
-        );
+        return 'https://commons.wikimedia.org/wiki/Special:FilePath/' . rawurlencode($title);
     }
 
     private function thumbUrl(string $title, int $width): string
     {
-        $hash = md5($title);
-
-        return sprintf(
-            'https://upload.wikimedia.org/wikipedia/commons/thumb/%s/%s/%s/%dpx-%s',
-            $hash[0],
-            substr($hash, 0, 2),
-            rawurlencode($title),
-            $width,
-            rawurlencode($title),
-        );
+        return $this->fileUrl($title) . '?width=' . $width;
     }
 
     private function connection(): Connection

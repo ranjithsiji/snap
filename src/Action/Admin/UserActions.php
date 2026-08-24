@@ -9,7 +9,11 @@ use JuryTool\Domain\Entity\OpinionEndorsement;
 use JuryTool\Domain\Entity\RoundJuror;
 use JuryTool\Domain\Entity\User;
 use JuryTool\Domain\Enum\UserRole;
+use JuryTool\Domain\Entity\Campaign;
+use JuryTool\Domain\Entity\Project;
+use JuryTool\Domain\Entity\RoleAssignment;
 use JuryTool\Middleware\AuthenticationMiddleware;
+use JuryTool\Service\AccessControl;
 use JuryTool\Service\ActivityLogger;
 use JuryTool\Support\DomainException;
 use JuryTool\Support\Json;
@@ -25,6 +29,7 @@ class UserActions
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly ActivityLogger $log,
+        private readonly AccessControl $access,
     ) {
     }
 
@@ -238,6 +243,160 @@ class UserActions
 
         return Json::write($response, [
             'user' => Presenter::user($user) + ['isActive' => $user->isActive()],
+        ]);
+    }
+
+    /**
+     * Everything one user has been trusted with, and where.
+     *
+     * The users table can only show a single word — "Lead" — which says
+     * nothing about *which* project, and a person may lead one project
+     * while merely judging a round of another. This is the view that
+     * answers that, and the one the grant controls act on.
+     */
+    public function roles(Request $request, Response $response, array $args): Response
+    {
+        $user = $this->find($args['id']);
+
+        // Juror seats are not RoleAssignment rows — a juror is invited to a
+        // round by username — so they are gathered separately. Without them
+        // the answer to "what is this person part of" is incomplete.
+        $seats = $this->em->createQuery(
+            'SELECT j FROM ' . RoundJuror::class . ' j
+             WHERE j.user = :user OR (j.username = :username AND j.user IS NULL)
+             ORDER BY j.invitedAt DESC'
+        )->setParameters([
+            'user' => $user,
+            'username' => $user->getUsername(),
+        ])->getResult();
+
+        return Json::write($response, [
+            'user' => Presenter::user($user) + ['isActive' => $user->isActive()],
+            'grants' => $this->access->roleHistory($user),
+            'rounds' => array_map(
+                static fn (RoundJuror $j): array => [
+                    'jurorId' => $j->getId(),
+                    'roundId' => $j->getRound()->getId(),
+                    'roundName' => $j->getRound()->getName(),
+                    'campaignName' => $j->getRound()->getCampaign()->getName(),
+                    'state' => $j->getRound()->getState()->value,
+                    'isActive' => $j->isActive(),
+                ],
+                $seats,
+            ),
+            // Offered so the dialog can present real choices rather than
+            // asking for an id to be typed.
+            'projects' => array_map(
+                static fn (Project $p): array => ['id' => $p->getId(), 'name' => $p->getName()],
+                $this->em->getRepository(Project::class)->findBy([], ['name' => 'ASC']),
+            ),
+            'campaigns' => array_map(
+                static fn (Campaign $c): array => [
+                    'id' => $c->getId(),
+                    'name' => $c->getName(),
+                    'projectName' => $c->getProject()->getName(),
+                ],
+                $this->em->getRepository(Campaign::class)->findBy([], ['name' => 'ASC']),
+            ),
+        ]);
+    }
+
+    /**
+     * Grants a scoped role: lead of a project, or organizer of a campaign.
+     *
+     * Administrator is deliberately not grantable here — it is the one role
+     * with no scope, and it is set through the role column so the existing
+     * last-administrator guard still applies.
+     */
+    public function grantRole(Request $request, Response $response, array $args): Response
+    {
+        $actor = $this->actor($request);
+        $user = $this->find($args['id']);
+        $body = Json::body($request);
+
+        $role = UserRole::tryFrom((string) ($body['role'] ?? ''));
+
+        if ($role === UserRole::Lead) {
+            $project = $this->em->getRepository(Project::class)->find(Json::int($body, 'projectId'));
+
+            if ($project === null) {
+                throw DomainException::notFound('Project');
+            }
+
+            $this->access->appointLead($user, $project, $actor);
+            $scope = $project->getName();
+        } elseif ($role === UserRole::Organizer) {
+            $campaign = $this->em->getRepository(Campaign::class)->find(Json::int($body, 'campaignId'));
+
+            if ($campaign === null) {
+                throw DomainException::notFound('Campaign');
+            }
+
+            $this->access->appointOrganizer($user, $campaign, $actor);
+            $scope = $campaign->getName();
+        } else {
+            throw DomainException::badRequest(
+                'Only lead and organizer are granted here; both need a project or campaign.'
+            );
+        }
+
+        // The role column is a summary of the grants, so it follows them
+        // rather than being set by hand.
+        $this->access->syncBaselineRole($user);
+
+        $this->log->record(
+            $actor,
+            'user.role_grant',
+            sprintf('Made %s %s of %s', $user->getUsername(), $role->value, $scope),
+            'User',
+            $user->getId(),
+            ['role' => $role->value, 'scope' => $scope],
+            $request,
+        );
+
+        return Json::write($response, [
+            'grants' => $this->access->roleHistory($user),
+            'user' => Presenter::user($user),
+        ]);
+    }
+
+    /** Withdraws one scoped grant. */
+    public function revokeRole(Request $request, Response $response, array $args): Response
+    {
+        $actor = $this->actor($request);
+        $user = $this->find($args['id']);
+
+        $assignment = $this->em->getRepository(RoleAssignment::class)->find((int) $args['grantId']);
+
+        if ($assignment === null || $assignment->getUser()->getId() !== $user->getId()) {
+            throw DomainException::notFound('Role assignment');
+        }
+
+        // Removing the last administrator here would lock everyone out just
+        // as surely as blocking them does.
+        if ($assignment->getRole() === UserRole::Admin) {
+            $this->assertNotLastAdministrator($actor, $user);
+        }
+
+        $scope = $assignment->scopeLabel();
+        $role = $assignment->getRole();
+
+        $this->access->revoke($assignment);
+        $this->access->syncBaselineRole($user);
+
+        $this->log->record(
+            $actor,
+            'user.role_revoke',
+            sprintf('Removed %s as %s of %s', $user->getUsername(), $role->value, $scope),
+            'User',
+            $user->getId(),
+            ['role' => $role->value, 'scope' => $scope],
+            $request,
+        );
+
+        return Json::write($response, [
+            'grants' => $this->access->roleHistory($user),
+            'user' => Presenter::user($user),
         ]);
     }
 

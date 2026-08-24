@@ -225,11 +225,22 @@ final class Presenter
      * and browsers fetch them straight from Wikimedia's CDN. Commons serves
      * any width from the same path, so a smaller thumbnail costs nothing to
      * produce and lets a juror on a slow connection work comfortably.
+     *
+     * Two shapes reach here: the API path's real upload.wikimedia.org thumb
+     * URL (.../thumb/x/xx/File.jpg/640px-File.jpg), and the replica path's
+     * Special:FilePath redirect (.../Special:FilePath/File.jpg?width=640).
+     * A URL of one shape silently surviving unchanged when only the other
+     * is handled is how the replica path lost its resizing before — it
+     * never errored, it just always served the default width.
      */
     public static function resizeThumb(?string $thumbUrl, int $width): ?string
     {
         if ($thumbUrl === null) {
             return null;
+        }
+
+        if (str_contains($thumbUrl, 'Special:FilePath')) {
+            return preg_replace('#([?&])width=\d+#', "\$1width={$width}", $thumbUrl, 1) ?? $thumbUrl;
         }
 
         return preg_replace('#/\d+px-#', "/{$width}px-", $thumbUrl, 1) ?? $thumbUrl;
