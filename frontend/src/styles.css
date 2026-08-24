@@ -483,19 +483,31 @@ body {
 /* One colour per voting method, so round type is legible at a glance
    across a whole page of cards, not only from the smaller label text. */
 .round-badge-yesno {
-  background-color: #14866d;
+  background-color: #41e5c1;
+  border-radius: 30px;
+  padding: 10px;
+  margin:5px 10px;
 }
 
 .round-badge-rating {
-  background-color: #ac6600;
+  background-color: #fd9edc;
+  border-radius: 30px;
+  padding: 10px;
+  margin:5px 10px;
 }
 
 .round-badge-rank {
-  background-color: #6485d1;
+  background-color: #85aaff;
+  border-radius: 30px;
+  padding: 10px;
+  margin:5px 10px;
 }
 
 .round-badge-meeting {
-  background-color: #9068d0;
+  background-color: #d3b7ff;
+  border-radius: 30px;
+  padding: 10px;
+  margin:5px 10px;
 }
 
 .round-card-title {
