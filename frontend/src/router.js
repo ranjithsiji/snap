@@ -119,6 +119,16 @@ const routes = [
     props: true,
   },
   {
+    // Editing a juror's own proposed ranking, full screen — the same
+    // gallery-with-position-boxes pattern an ordinary ranking round
+    // uses, rather than a cramped dialog listing every image in a
+    // single narrow column.
+    path: '/meetings/:id/rank',
+    name: 'meeting-rank',
+    component: () => import('@/views/MeetingRankView.vue'),
+    props: true,
+  },
+  {
     path: '/vote/:id',
     name: 'vote',
     component: () => import('@/views/VoteView.vue'),
