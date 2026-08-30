@@ -56,6 +56,22 @@ const pickedImageId = ref(null)
 // queue excludes images this juror has voted on.
 const alreadyJudged = ref(null)
 
+// The score just clicked, held from the click until the stage moves on to
+// another image — the queue never returns the juror's own vote, so this
+// is the only record of it while the star row still needs to show it.
+const pendingScore = ref(null)
+
+// What the star row should show as filled: the vote just cast, or the
+// verdict already on record for an image opened from a judged gallery
+// tab. Never both — alreadyJudged only applies to an image nothing has
+// been clicked on yet this visit, and a fresh click means a fresh choice.
+const displayedScore = computed(() => pendingScore.value ?? alreadyJudged.value)
+
+// The star currently under the pointer, so hovering the third star
+// previews all three as filled rather than only the one being pointed
+// at — moving off the row falls back to whatever is actually recorded.
+const hoveredScore = ref(null)
+
 // "single" walks one image at a time; "gallery" is the fast grid pass.
 const mode = ref('single')
 const showFullSize = ref(false)
@@ -158,6 +174,7 @@ function openInSingleView(image) {
   // "already voted" error. The queue itself never hands these out, so the
   // stage only ever sees one via this path.
   alreadyJudged.value = image.score ?? null
+  pendingScore.value = null
 }
 
 /**
@@ -182,8 +199,10 @@ async function loadQueue() {
     images.value = data.images
     exhausted.value = data.exhausted
     // Everything the queue returns is awaiting this juror's verdict, so
-    // any banner left over from a gallery pick no longer applies.
+    // any banner or fill left over from a gallery pick or the last vote
+    // no longer applies.
     alreadyJudged.value = null
+    pendingScore.value = null
   } finally {
     fetchingNext.value = false
   }
@@ -211,6 +230,10 @@ async function vote(score) {
   error.value = null
   busy.value = true
   showFullSize.value = false
+  // Fills the clicked star and everything before it the instant the click
+  // happens, rather than only once the request returns — the star row
+  // otherwise looked like the click had no effect for the whole round trip.
+  pendingScore.value = score
 
   try {
     const data = await api.post(`/my/images/${current.value.id}/vote`, { score })
@@ -225,6 +248,9 @@ async function vote(score) {
     if (images.value.length === 0) await loadQueue()
   } catch (e) {
     error.value = e.message
+    // The vote did not go through, so the fill should not linger on stars
+    // that do not reflect anything real.
+    pendingScore.value = null
   } finally {
     busy.value = false
   }
@@ -235,6 +261,7 @@ async function skip() {
 
   busy.value = true
   showFullSize.value = false
+  pendingScore.value = null
 
   try {
     await api.post(`/my/images/${current.value.id}/skip`, { skipped: true })
@@ -477,14 +504,16 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
             </CdxButton>
           </div>
 
-          <div v-else class="star-row">
+          <div v-else class="star-row" @mouseleave="hoveredScore = null">
             <button
               v-for="star in stars"
               :key="star"
               type="button"
               class="star"
+              :class="{ on: (hoveredScore ?? displayedScore) >= star }"
               :aria-label="`Rate ${star}`"
               :disabled="busy || alreadyJudged !== null"
+              @mouseenter="hoveredScore = star"
               @click="vote(star)"
             >
               ★

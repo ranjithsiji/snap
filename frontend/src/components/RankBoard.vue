@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { CdxButton, CdxMessage, CdxTextInput } from '@wikimedia/codex'
+import { CdxButton, CdxIcon, CdxMessage, CdxProgressBar, CdxTextInput } from '@wikimedia/codex'
+import { cdxIconCollapse, cdxIconExpand } from '@wikimedia/codex-icons'
 import { api } from '@/api'
 
 /**
@@ -24,6 +25,32 @@ const busy = ref(false)
 const error = ref(null)
 const done = ref(false)
 const lightbox = ref(null)
+
+// Remembered across images rather than reset per-open — same reasoning as
+// the gallery's lightbox: dismissing the panel should stay dismissed while
+// flicking between photos, not reappear for every one.
+const lightboxDetailsOpen = ref(true)
+
+// True from openLightbox until the new image has actually loaded, so the
+// previous photo does not sit on screen looking unchanged while the next
+// one is still fetching.
+const lightboxLoading = ref(false)
+
+function openLightbox(image) {
+  lightboxLoading.value = true
+  lightbox.value = image
+}
+
+// The lightbox is opened with the image alone; its rank lives on the
+// entry wrapping it, found by index since applyRank needs a position to
+// insert at, not just the entry — and that position shifts as other
+// entries are renumbered while the lightbox stays open.
+const lightboxIndex = computed(() =>
+  entries.value.findIndex((entry) => entry.image.id === lightbox.value?.id),
+)
+const lightboxEntry = computed(() =>
+  lightboxIndex.value === -1 ? null : entries.value[lightboxIndex.value],
+)
 
 watch(
   () => props.images,
@@ -204,7 +231,7 @@ async function submit() {
           type="button"
           class="tile-action tile-zoom"
           aria-label="View larger"
-          @click="lightbox = entry.image"
+          @click="openLightbox(entry.image)"
         >
           ⤢
         </button>
@@ -225,8 +252,101 @@ async function submit() {
     </div>
   </template>
 
+  <!-- Same lightbox as the gallery grid, not the bare image-and-caption
+       overlay this used to open: a juror comparing full-resolution detail
+       wants the resolution, uploader and original-file link here too,
+       rather than a different, thinner view depending on which round type
+       they are judging. -->
   <div v-if="lightbox" class="lightbox" @click="lightbox = null">
-    <img :src="lightbox.fileUrl ?? lightbox.thumbUrl" :alt="lightbox.name ?? 'Contest image'" />
-    <p v-if="lightbox.name" class="lightbox-caption">{{ lightbox.name }}</p>
+    <CdxProgressBar v-if="lightboxLoading" class="lightbox-progress" aria-label="Loading image" />
+
+    <img
+      v-show="!lightboxLoading"
+      class="lightbox-image"
+      :src="lightbox.lightboxUrl ?? lightbox.fileUrl ?? lightbox.thumbUrl"
+      :alt="lightbox.name ?? 'Contest image'"
+      @load="lightboxLoading = false"
+      @error="lightboxLoading = false"
+    />
+
+    <aside v-if="lightboxDetailsOpen" class="lightbox-panel" @click.stop>
+      <div class="row lightbox-panel-head">
+        <h2 class="vote-filename">{{ lightbox.name ?? 'Contest image' }}</h2>
+        <CdxButton
+          weight="quiet"
+          aria-label="Minimise details"
+          title="Minimise details"
+          @click="lightboxDetailsOpen = false"
+        >
+          <CdxIcon :icon="cdxIconCollapse" />
+        </CdxButton>
+      </div>
+
+      <template v-if="lightbox.width || lightbox.megapixels || lightbox.uploader">
+        <h3 class="vote-section">Image</h3>
+        <dl class="stat-list">
+          <div v-if="lightbox.width">
+            <dt>Resolution</dt>
+            <dd>{{ lightbox.width }} × {{ lightbox.height }}</dd>
+          </div>
+          <div v-if="lightbox.megapixels">
+            <dt>Megapixels</dt>
+            <dd>{{ lightbox.megapixels }} Mpix</dd>
+          </div>
+          <div v-if="lightbox.uploader">
+            <dt>Uploader</dt>
+            <dd>{{ lightbox.uploader }}</dd>
+          </div>
+        </dl>
+      </template>
+
+      <template v-if="lightboxEntry">
+        <h3 class="vote-section">Rank</h3>
+        <CdxTextInput
+          class="lightbox-rank-input"
+          :model-value="lightboxEntry.rank"
+          input-type="number"
+          min="1"
+          :max="entries.length"
+          :aria-label="`Rank for ${lightbox.name ?? 'this image'}`"
+          :status="rankStatus(lightboxEntry)"
+          @click.stop
+          @update:model-value="applyRank(lightboxIndex, $event)"
+        />
+      </template>
+
+      <a
+        v-if="lightbox.descriptionUrl"
+        class="lightbox-panel-link"
+        :href="lightbox.descriptionUrl"
+        target="_blank"
+        rel="noopener"
+      >
+        Open the Commons page
+      </a>
+
+      <a
+        v-if="lightbox.fileUrl"
+        class="lightbox-panel-link"
+        :href="lightbox.fileUrl"
+        target="_blank"
+        rel="noopener"
+      >
+        Open the original file
+      </a>
+    </aside>
+
+    <!-- Only shown once minimised: with the panel open, the collapse
+         button inside it already does this job. -->
+    <CdxButton
+      v-else
+      weight="quiet"
+      class="lightbox-restore"
+      aria-label="Show details"
+      title="Show details"
+      @click.stop="lightboxDetailsOpen = true"
+    >
+      <CdxIcon :icon="cdxIconExpand" />
+    </CdxButton>
   </div>
 </template>

@@ -1139,6 +1139,12 @@ body {
   max-width: 5.5rem;
 }
 
+/* Ranks run at most three digits, so the lightbox panel's field is sized
+   to that rather than stretching to the panel's full width. */
+.lightbox-rank-input.cdx-text-input {
+  max-width: 5.5rem;
+}
+
 /* A duplicated rank is flagged on the whole tile, not just the field, so
    it is visible while scanning a large grid. */
 .rank-tile-invalid {
@@ -1382,7 +1388,11 @@ body {
   padding: 0 var(--spacing-12);
 }
 
-.star:hover,
+/* Fill state — both the vote just cast and a hover preview — is driven
+   entirely from JS as the "on" class: hovering the third star must fill
+   the first two as well, which a plain :hover pseudo-class cannot do
+   since it only ever matches the one button the pointer is actually
+   over. */
 .star.on {
   color: var(--color-warning);
 }
