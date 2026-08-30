@@ -1152,6 +1152,25 @@ body {
   box-shadow: inset 0 0 0 1px var(--border-color-error);
 }
 
+/* Typing a rank now moves the tile to its new position in the same
+   instant — a highlight is what makes that move visible rather than a
+   grid that has just silently rearranged itself, especially once a tile
+   has moved somewhere the juror was not already looking. Fades out on
+   its own rather than needing a second interaction to dismiss. */
+.rank-tile-moved {
+  border-color: var(--border-color-progressive);
+  animation: rank-tile-moved-fade 1.2s ease-out;
+}
+
+@keyframes rank-tile-moved-fade {
+  from {
+    box-shadow: 0 0 0 3px var(--border-color-progressive);
+  }
+  to {
+    box-shadow: 0 0 0 3px transparent;
+  }
+}
+
 .meeting-gallery-tile {
   aspect-ratio: auto;
   display: flex;

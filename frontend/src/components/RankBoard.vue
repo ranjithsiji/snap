@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { CdxButton, CdxIcon, CdxMessage, CdxProgressBar, CdxTextInput } from '@wikimedia/codex'
 import { cdxIconCollapse, cdxIconExpand } from '@wikimedia/codex-icons'
 import { api } from '@/api'
@@ -25,6 +25,13 @@ const busy = ref(false)
 const error = ref(null)
 const done = ref(false)
 const lightbox = ref(null)
+
+// The image id whose rank was just typed, so its tile can be highlighted
+// while it moves to the new position — cleared after the highlight has
+// had time to be seen, so it does not linger on a tile the juror is no
+// longer looking at.
+const justMovedId = ref(null)
+let justMovedTimer = null
 
 // Remembered across images rather than reset per-open — same reasoning as
 // the gallery's lightbox: dismissing the panel should stay dismissed while
@@ -87,12 +94,13 @@ const isValid = computed(() => missing.value === 0 && duplicates.value.size === 
 
 /**
  * Applies a typed rank by inserting the image at that position and
- * shifting everything from there down.
+ * shifting everything from there down — then moves its tile there too, so
+ * the grid always shows the order the numbers describe.
  *
- * Without this, typing "1" on a second image would silently leave two
- * images sharing rank 1. Reassigning the whole sequence keeps the ranks a
- * genuine permutation at every keystroke, so a duplicate can never be
- * submitted in the first place.
+ * Without the renumbering, typing "1" on a second image would silently
+ * leave two images sharing rank 1. Reassigning the whole sequence keeps
+ * the ranks a genuine permutation at every keystroke, so a duplicate can
+ * never be submitted in the first place.
  */
 function applyRank(changedIndex, rawValue) {
   const entry = entries.value[changedIndex]
@@ -115,22 +123,27 @@ function applyRank(changedIndex, rawValue) {
 
   others.splice(target - 1, 0, entry)
 
-  const positions = new Map(others.map((item, index) => [item.image.id, index + 1]))
-
-  // Mutated in place, and only where the rank actually changed, rather
-  // than replacing all 200 entries with new objects on every keystroke.
-  // A fresh array forced every tile to re-render on every digit typed
-  // anywhere in the grid — with two hundred controlled number inputs
-  // that showed up as visibly glitching, half-rendered fields while
-  // typing. Assigning only the ranks that moved keeps Vue's reactivity
-  // from touching the tiles that did not.
-  for (const item of entries.value) {
-    const next = String(positions.get(item.image.id))
+  for (const [index, item] of others.entries()) {
+    const next = String(index + 1)
 
     if (item.rank !== next) {
       item.rank = next
     }
   }
+
+  // Replaces the whole array so the grid's DOM order — not just the typed
+  // numbers — reflects the new ranking immediately. entries is keyed by
+  // image id in the template, so Vue moves each tile's existing element
+  // rather than re-rendering it, which is what lets the highlight below
+  // travel with the tile instead of flashing on whatever now happens to
+  // sit in its old spot.
+  entries.value = others
+
+  justMovedId.value = entry.image.id
+  clearTimeout(justMovedTimer)
+  justMovedTimer = setTimeout(() => {
+    if (justMovedId.value === entry.image.id) justMovedId.value = null
+  }, 1200)
 }
 
 /** Field status: duplicates are an error, a blank rank a pending warning. */
@@ -175,6 +188,8 @@ async function submit() {
     busy.value = false
   }
 }
+
+onUnmounted(() => clearTimeout(justMovedTimer))
 </script>
 
 <template>
@@ -219,7 +234,10 @@ async function submit() {
         v-for="(entry, index) in entries"
         :key="entry.image.id"
         class="gallery-tile rank-tile"
-        :class="{ 'rank-tile-invalid': rankStatus(entry) === 'error' }"
+        :class="{
+          'rank-tile-invalid': rankStatus(entry) === 'error',
+          'rank-tile-moved': justMovedId === entry.image.id,
+        }"
       >
         <img
           :src="entry.image.thumbUrl"
