@@ -7,6 +7,8 @@ import {
   cdxIconCollapse,
   cdxIconExpand,
   cdxIconFullscreen,
+  cdxIconNext,
+  cdxIconPrevious,
 } from '@wikimedia/codex-icons'
 import { api } from '@/api'
 import { formatNumber } from '@/format'
@@ -58,6 +60,22 @@ const lightboxLoading = ref(false)
 function openLightbox(image) {
   lightboxLoading.value = true
   lightbox.value = image
+}
+
+// Moves the open lightbox to the neighbouring image on the current page,
+// without closing it — scanning through the set is the point of a
+// lightbox, and forcing a close-reopen for every image defeats that.
+// Stops at the page boundary rather than crossing into the next page:
+// that would need its own fetch, and jumping the grid underneath a juror
+// who is mid-lightbox is worse than asking them to page forward first.
+const lightboxIndex = computed(() =>
+  lightbox.value ? images.value.findIndex((i) => i.id === lightbox.value.id) : -1,
+)
+
+function lightboxStep(direction) {
+  const next = images.value[lightboxIndex.value + direction]
+
+  if (next) openLightbox(next)
 }
 
 const isYesNo = computed(() => props.round.votingMethod === 'yesno')
@@ -407,6 +425,18 @@ async function toggleFavorite(image) {
           Not yet judged
         </p>
       </template>
+
+      <div class="row lightbox-panel-nav">
+        <CdxButton :disabled="lightboxIndex <= 0" @click="lightboxStep(-1)">
+          <CdxIcon :icon="cdxIconPrevious" /> Prev
+        </CdxButton>
+        <CdxButton
+          :disabled="lightboxIndex === -1 || lightboxIndex >= images.length - 1"
+          @click="lightboxStep(1)"
+        >
+          Next <CdxIcon :icon="cdxIconNext" />
+        </CdxButton>
+      </div>
 
       <a
         v-if="lightbox.descriptionUrl"

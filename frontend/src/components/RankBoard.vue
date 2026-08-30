@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { CdxButton, CdxIcon, CdxMessage, CdxProgressBar, CdxTextInput } from '@wikimedia/codex'
-import { cdxIconCollapse, cdxIconExpand } from '@wikimedia/codex-icons'
+import { cdxIconCollapse, cdxIconExpand, cdxIconNext, cdxIconPrevious } from '@wikimedia/codex-icons'
 import { api } from '@/api'
 
 /**
@@ -58,6 +58,18 @@ const lightboxIndex = computed(() =>
 const lightboxEntry = computed(() =>
   lightboxIndex.value === -1 ? null : entries.value[lightboxIndex.value],
 )
+
+// Moves the open lightbox to the neighbouring image in grid order,
+// without closing it — scanning through the set is the point of a
+// lightbox, and forcing a close-reopen for every image defeats that.
+// Grid order rather than a fixed list: if the juror retypes a rank while
+// the lightbox is open, "next" should follow the ranking as it now
+// stands, not the order it had when the lightbox was first opened.
+function lightboxStep(direction) {
+  const next = entries.value[lightboxIndex.value + direction]
+
+  if (next) openLightbox(next.image)
+}
 
 watch(
   () => props.images,
@@ -346,6 +358,18 @@ onUnmounted(() => clearTimeout(justMovedTimer))
           @blur="commitRank(lightboxIndex)"
         />
       </template>
+
+      <div class="row lightbox-panel-nav">
+        <CdxButton :disabled="lightboxIndex <= 0" @click="lightboxStep(-1)">
+          <CdxIcon :icon="cdxIconPrevious" /> Prev
+        </CdxButton>
+        <CdxButton
+          :disabled="lightboxIndex === -1 || lightboxIndex >= entries.length - 1"
+          @click="lightboxStep(1)"
+        >
+          Next <CdxIcon :icon="cdxIconNext" />
+        </CdxButton>
+      </div>
 
       <a
         v-if="lightbox.descriptionUrl"
