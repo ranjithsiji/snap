@@ -49,7 +49,7 @@ function openLightbox(image) {
 }
 
 // The lightbox is opened with the image alone; its rank lives on the
-// entry wrapping it, found by index since applyRank needs a position to
+// entry wrapping it, found by index since commitRank needs a position to
 // insert at, not just the entry — and that position shifts as other
 // entries are renumbered while the lightbox stays open.
 const lightboxIndex = computed(() =>
@@ -93,23 +93,33 @@ const missing = computed(() => entries.value.length - ranks.value.length)
 const isValid = computed(() => missing.value === 0 && duplicates.value.size === 0)
 
 /**
+ * Updates the typed text only — no reordering. Reordering on every
+ * keystroke made a two-digit rank impossible to type: entering "1" of a
+ * planned "12" moved the tile (and the field along with it) to position 1
+ * before the second digit could be typed. commitRank does the actual
+ * move, once the juror presses Enter or leaves the field.
+ */
+function editRank(changedIndex, rawValue) {
+  entries.value[changedIndex].rank = rawValue
+}
+
+/**
  * Applies a typed rank by inserting the image at that position and
  * shifting everything from there down — then moves its tile there too, so
  * the grid always shows the order the numbers describe.
  *
- * Without the renumbering, typing "1" on a second image would silently
- * leave two images sharing rank 1. Reassigning the whole sequence keeps
- * the ranks a genuine permutation at every keystroke, so a duplicate can
- * never be submitted in the first place.
+ * Without the renumbering, committing "1" on a second image would
+ * silently leave two images sharing rank 1. Reassigning the whole
+ * sequence keeps the ranks a genuine permutation at every commit, so a
+ * duplicate can never be submitted in the first place.
  */
-function applyRank(changedIndex, rawValue) {
+function commitRank(changedIndex) {
   const entry = entries.value[changedIndex]
-  const requested = Number(rawValue)
+  const requested = Number(entry.rank)
 
-  // Let the field be cleared or half-typed without reshuffling under the
-  // juror's cursor; validation catches anything still blank at submit.
+  // Leave a cleared or invalid field as it is rather than reshuffling —
+  // validation catches anything still blank or duplicated at submit.
   if (!Number.isInteger(requested) || requested < 1) {
-    entry.rank = rawValue
     return
   }
 
@@ -263,7 +273,9 @@ onUnmounted(() => clearTimeout(justMovedTimer))
             :aria-label="`Rank for ${entry.image.name ?? 'this image'}`"
             :aria-invalid="duplicates.has(Number(entry.rank)) ? 'true' : undefined"
             :status="rankStatus(entry)"
-            @update:model-value="applyRank(index, $event)"
+            @update:model-value="editRank(index, $event)"
+            @keydown.enter="commitRank(index)"
+            @blur="commitRank(index)"
           />
         </figcaption>
       </figure>
@@ -329,7 +341,9 @@ onUnmounted(() => clearTimeout(justMovedTimer))
           :aria-label="`Rank for ${lightbox.name ?? 'this image'}`"
           :status="rankStatus(lightboxEntry)"
           @click.stop
-          @update:model-value="applyRank(lightboxIndex, $event)"
+          @update:model-value="editRank(lightboxIndex, $event)"
+          @keydown.enter="commitRank(lightboxIndex)"
+          @blur="commitRank(lightboxIndex)"
         />
       </template>
 
