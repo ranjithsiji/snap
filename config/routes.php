@@ -12,6 +12,7 @@ use JuryTool\Action\Jury\JuryActions;
 use JuryTool\Action\Jury\MeetingActions;
 use JuryTool\Middleware\RequireRole;
 use JuryTool\Service\AccessControl;
+use JuryTool\Support\Json;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\App;
@@ -28,6 +29,18 @@ return function (App $app): void {
     // one is easier to get right. It is declared before the SPA catch-all
     // so Vue Router can never shadow it.
     $app->get('/wikicallback', [AuthActions::class, 'oauthCallback']);
+
+    // For Toolforge's --health-check-path: an HTTP check that confirms PHP
+    // itself can answer, rather than the default TCP check, which only
+    // confirms something is listening on the port — true the instant the
+    // process binds it, well before lighttpd/php-fpm can actually serve a
+    // request. A closure rather than an Action class on purpose: nothing
+    // here should depend on the database or anything else that could turn
+    // an unrelated outage into every request during a deploy racing an
+    // unready pod, which is the whole reason this route exists.
+    $app->get('/api/health', function (Request $request, Response $response): Response {
+        return Json::write($response, ['status' => 'ok']);
+    });
 
     $app->group('/api', function (RouteCollectorProxy $api) use ($access): void {
         // --- Authentication -------------------------------------------
