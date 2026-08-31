@@ -1171,6 +1171,44 @@ body {
   }
 }
 
+/* Grabbing anywhere on the tile would fight with viewing it larger or
+   selecting the rank field's text, so dragging only starts from this
+   handle — opposite corner from the zoom button, revealed the same way
+   on hover so a resting grid stays uncluttered. */
+.tile-drag-handle {
+  position: absolute;
+  top: var(--spacing-50);
+  right: var(--spacing-50);
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--border-radius-base);
+  background-color: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: grab;
+  opacity: 0;
+  transition: opacity 120ms ease;
+  touch-action: none;
+}
+
+.rank-tile:hover .tile-drag-handle,
+.rank-tile:focus-within .tile-drag-handle {
+  opacity: 1;
+}
+
+.tile-drag-handle:active {
+  cursor: grabbing;
+}
+
+/* SortableJS's placeholder for where the dragged tile would land. */
+.rank-tile-drag-ghost {
+  opacity: 0.4;
+}
+
 .meeting-gallery-tile {
   aspect-ratio: auto;
   display: flex;

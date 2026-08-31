@@ -20,6 +20,9 @@ importers:
       pinia:
         specifier: ^2.1.7
         version: 2.3.1(vue@3.5.41)
+      sortablejs:
+        specifier: 1.15.7
+        version: 1.15.7
       vue:
         specifier: ^3.5.13
         version: 3.5.41
@@ -488,6 +491,9 @@ packages:
     engines: {node: '>=18.0.0', npm: '>=8.0.0'}
     hasBin: true
 
+  sortablejs@1.15.7:
+    resolution: {integrity: sha512-Kk8wLQPlS+yi1ZEf48a4+fzHa4yxjC30M/Sr2AnQu+f/MPwvvX9XjZ6OWejiz8crBsLwSq8GHqaxaET7u6ux0A==}
+
   source-map-js@1.2.1:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
     engines: {node: '>=0.10.0'}
@@ -928,6 +934,8 @@ snapshots:
       '@rollup/rollup-win32-x64-gnu': 4.62.5
       '@rollup/rollup-win32-x64-msvc': 4.62.5
       fsevents: 2.3.3
+
+  sortablejs@1.15.7: {}
 
   source-map-js@1.2.1: {}
 
