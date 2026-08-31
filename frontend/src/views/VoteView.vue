@@ -319,6 +319,19 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 <template>
   <CdxProgressBar v-if="loading" aria-label="Loading round" />
 
+  <!-- loadRound() can throw before round is ever set — not a juror on
+       this round, the round no longer exists, and so on — in which case
+       the message below was previously unreachable: it lived inside the
+       v-else-if="round" branch, so a request that failed before round was
+       set left the page rendering nothing at all rather than the error a
+       juror (or an admin who is not on this round's panel) needed to see. -->
+  <template v-else-if="error">
+    <CdxMessage type="error">{{ error }}</CdxMessage>
+    <CdxButton style="margin-top: 1rem" @click="router.push({ name: 'my-rounds' })">
+      Back to my rounds
+    </CdxButton>
+  </template>
+
   <template v-else-if="round">
     <div class="page-head">
       <div>
