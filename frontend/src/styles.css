@@ -248,6 +248,15 @@ body {
 .topbar .bar-button:hover:not(:disabled) {
   color: #fff;
   background-color: rgba(255, 255, 255, 0.22);
+  /* Codex's own quiet-button hover also sets mix-blend-mode: multiply,
+     tuned for a light page behind the button. Multiplying a translucent
+     white fill against this bar's own dark background crushes it down to
+     nearly nothing — confirmed by rendering both side by side — which
+     is why the hover looked invisible despite the background-color
+     override above actually taking effect. Reset back to normal, since
+     nothing about this bar (its background never changes with the app's
+     theme) calls for a blend mode meant for a light surface. */
+  mix-blend-mode: normal;
 }
 
 .topbar-user {
