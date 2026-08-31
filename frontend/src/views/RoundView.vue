@@ -42,6 +42,24 @@ const needsImport = computed(
   () => Boolean(round.value?.sourceCategory) && (stats.value?.files ?? 0) === 0,
 )
 
+/**
+ * A round with no source of its own — category, file list, or URL —
+ * waiting on a campaign pool that has never been imported. The other way
+ * a round ends up with nothing to show, and the one with no button on
+ * this page to fix it: importing the pool happens on the campaign, not
+ * here. Saving the round itself already fills it the moment the campaign
+ * catches up (see RoundActions::update), so this is purely about a
+ * coordinator otherwise staring at 0 images with no way to tell why.
+ */
+const needsCampaignImport = computed(
+  () =>
+    !needsImport.value &&
+    round.value?.hasOwnSource === false &&
+    !round.value?.isContinuation &&
+    !round.value?.campaignImportedAt &&
+    (stats.value?.files ?? 0) === 0,
+)
+
 /** The category's size, asked before importing so the job is legible. */
 async function loadPreview() {
   if (!needsImport.value) {
@@ -311,6 +329,18 @@ async function submitDerivation() {
   <template v-else-if="round">
     <div class="page-head">
       <div>
+        <!-- A round page otherwise names nothing above it: a coordinator
+             landing here from a link, or after a round they created came
+             up unexpectedly empty, had no way to reach the campaign it
+             belongs to — including the "Import campaign pool" step that
+             lives there, not here, for a round with no category of its
+             own. -->
+        <router-link
+          :to="{ name: 'campaign', params: { id: round.campaignId } }"
+          class="page-breadcrumb"
+        >
+          {{ round.campaignName }}
+        </router-link>
         <h1 class="page-title">{{ round.name }}</h1>
         <p class="page-subtitle">
           {{ round.votingMethodLabel }} · {{ round.state }}
@@ -454,6 +484,31 @@ async function submitDerivation() {
         </CdxButton>
         <span v-if="preview === null" class="muted">Checking the category…</span>
       </div>
+    </div>
+
+    <!-- The round's own way of ending up empty has a button right here;
+         this is the other way — no category, file list, or URL of its
+         own, waiting on a campaign pool nobody has imported yet — which
+         has no button here because the action belongs on the campaign
+         page, not this one. Says "images" rather than naming a category
+         throughout: the campaign's own source might just as well be a
+         pasted file list or a URL, and fetching those files' details from
+         Commons is exactly the same "import" step either way. -->
+    <div v-else-if="needsCampaignImport" class="card import-panel">
+      <h2 class="section-title" style="margin-top: 0">Import the campaign's images</h2>
+
+      <p class="muted import-lede">
+        This round has no source of its own, so it draws from
+        <router-link :to="{ name: 'campaign', params: { id: round.campaignId } }">
+          {{ round.campaignName }}
+        </router-link>
+        — whose images have not been fetched from Commons yet. Import them there, and this round
+        fills in on its own the next time it is saved.
+      </p>
+
+      <CdxButton @click="router.push({ name: 'campaign', params: { id: round.campaignId } })">
+        Go to {{ round.campaignName }}
+      </CdxButton>
     </div>
 
     <!-- How far the round has got, above its configuration: it is the

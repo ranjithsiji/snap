@@ -362,6 +362,22 @@ body {
   margin-bottom: var(--spacing-150);
 }
 
+/* Names the page above it belongs to, e.g. a round's campaign — a link
+   back up rather than just a label, since the parent is often exactly
+   where the action a coordinator needs (import, edit) actually lives. */
+.page-breadcrumb {
+  display: block;
+  margin-bottom: var(--spacing-25);
+  color: var(--color-subtle);
+  font-size: var(--font-size-small);
+  text-decoration: none;
+}
+
+.page-breadcrumb:hover {
+  color: var(--color-progressive);
+  text-decoration: underline;
+}
+
 .page-title {
   margin: 0;
   font-size: var(--font-size-xx-large);

@@ -102,6 +102,10 @@ final class Presenter
             'id' => $round->getId(),
             'campaignId' => $round->getCampaign()->getId(),
             'campaignName' => $round->getCampaign()->getName(),
+            // Lets a round with no category of its own tell whether the
+            // pool it falls back to is actually there yet — the campaign
+            // page is where importing it happens, not this one.
+            'campaignImportedAt' => self::date($round->getCampaign()->getImportedAt()),
             'name' => $round->getName(),
             'sequence' => $round->getSequence(),
             'details' => $round->getDetails(),

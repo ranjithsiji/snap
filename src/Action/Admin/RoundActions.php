@@ -360,16 +360,41 @@ class RoundActions
 
         $this->em->flush();
 
+        // A round created with a category that turned out empty or
+        // near-miss — or edited before the campaign had finished importing
+        // — never got past create()'s populate step, and stayed silently
+        // empty from then on: reapplyRules below only re-evaluates images
+        // already in the round, so a round with none stays with none no
+        // matter how many times its settings are edited afterwards. If the
+        // round still has no images of its own and no source to import
+        // (the coordinator just cleared the category, say), fill it from
+        // the campaign pool the same way create() would have, rather than
+        // leaving the coordinator to work out that the round needs
+        // recreating from scratch.
+        $population = null;
+
+        if ($round->getImages()->isEmpty()
+            && !$round->isDerived()
+            && !$round->hasOwnSource()
+            && $round->getCampaign()->hasBeenImported()
+        ) {
+            $population = $this->population->populateFromCampaignPool($round)->toArray();
+        }
+
         // Changing the file settings changes which images qualify, so the
         // rules are re-applied to images that have not yet been voted on.
+        // Skipped when populate just ran: it already evaluated every image
+        // it added against the current settings, so there is nothing left
+        // to re-apply.
         $reapplied = null;
 
-        if (isset($body['fileSettings'])) {
+        if ($population === null && isset($body['fileSettings'])) {
             $reapplied = $this->population->reapplyRules($round)->toArray();
         }
 
         return Json::write($response, [
             'round' => Presenter::round($round),
+            'population' => $population,
             'reapplied' => $reapplied,
         ]);
     }
