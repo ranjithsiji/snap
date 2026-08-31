@@ -215,6 +215,31 @@ try {
 
             break;
 
+        case 'user:password':
+            $username = $args[0] ?? null;
+            $password = $args[1] ?? null;
+
+            if ($username === null || $password === null) {
+                echo "Usage: bin/console user:password <username> <new-password>\n";
+                exit(1);
+            }
+
+            $user = $em->getRepository(User::class)->findOneBy([
+                'username' => User::canonicaliseUsername($username),
+            ]);
+
+            if ($user === null) {
+                echo "No such user.\n";
+                exit(1);
+            }
+
+            $user->setPassword($password);
+            $em->flush();
+
+            echo "Password reset for '{$user->getUsername()}'.\n";
+
+            break;
+
         case 'user:list':
             foreach ($em->getRepository(User::class)->findAll() as $user) {
                 printf(
@@ -394,6 +419,7 @@ try {
 
             Users
               user:create <name> <pass> [role]   Create a local account
+              user:password <name> <new-pass>    Reset a local account's password
               user:role <name> <role>            Change a user's role
               user:list                          List all users
 
