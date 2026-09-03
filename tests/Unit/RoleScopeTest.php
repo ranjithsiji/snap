@@ -7,8 +7,13 @@ namespace JuryTool\Tests\Unit;
 use JuryTool\Domain\Entity\Campaign;
 use JuryTool\Domain\Entity\Project;
 use JuryTool\Domain\Entity\RoleAssignment;
+use JuryTool\Domain\Entity\Round;
 use JuryTool\Domain\Entity\User;
 use JuryTool\Domain\Enum\UserRole;
+use JuryTool\Service\AccessControl;
+use JuryTool\Support\DomainException;
+use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\EntityRepository;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -46,6 +51,12 @@ class RoleScopeTest extends TestCase
     private static function campaign(int $id, Project $project, string $name): Campaign
     {
         return self::withId(new Campaign($project, $name, strtolower($name)), $id);
+    }
+
+    /** A round is only ever reached through its campaign, which is what the guards read. */
+    private static function roundIn(Campaign $campaign): Round
+    {
+        return new Round($campaign, 'Round 1');
     }
 
     #[Test]
@@ -114,5 +125,84 @@ class RoleScopeTest extends TestCase
 
         self::assertSame($project, $grant->getProject());
         self::assertFalse($grant->coversCampaign(self::campaign(11, $project, 'Earth 2027')));
+    }
+
+    /**
+     * An AccessControl whose only grants are the ones given, so the guards
+     * can be exercised without a database behind them.
+     *
+     * @param list<RoleAssignment> $grants
+     */
+    private function accessControlWith(array $grants): AccessControl
+    {
+        $repository = $this->createMock(EntityRepository::class);
+        $repository->method('findBy')->willReturn($grants);
+
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->method('getRepository')->willReturn($repository);
+
+        return new AccessControl($em);
+    }
+
+    /**
+     * The whole point of the role: an organizer runs every round in the
+     * campaign they were appointed to.
+     *
+     * Each of create, read, update and delete in RoundActions ends at one
+     * of these two guards — create asks requireOrganizer about the campaign
+     * directly, the rest go through requireRoundAccess — so an organizer
+     * passing both is what CRUD over the campaign's rounds amounts to.
+     */
+    #[Test]
+    public function anOrganizerHasFullControlOfTheirCampaignsRounds(): void
+    {
+        $organizer = new User('Ida', UserRole::Organizer);
+        $campaign = self::campaign(10, self::project(1, 'Earth'), 'Earth 2026');
+
+        $access = $this->accessControlWith([
+            RoleAssignment::organizer($organizer, $campaign),
+        ]);
+
+        self::assertTrue($access->organizes($organizer, $campaign));
+
+        // Guards throw rather than return, so reaching the line after them
+        // is the pass.
+        $access->requireOrganizer($organizer, $campaign);
+        $access->requireRoundAccess($organizer, self::roundIn($campaign));
+
+        self::assertTrue(true, 'Neither guard refused an organizer of this campaign.');
+    }
+
+    /** The same guards, on a campaign they were not appointed to. */
+    #[Test]
+    public function anOrganizerHasNoControlOfAnotherCampaignsRounds(): void
+    {
+        $organizer = new User('Ida', UserRole::Organizer);
+        $mine = self::campaign(10, self::project(1, 'Earth'), 'Earth 2026');
+        $theirs = self::campaign(20, self::project(2, 'Folklore'), 'Folklore 2026');
+
+        $access = $this->accessControlWith([
+            RoleAssignment::organizer($organizer, $mine),
+        ]);
+
+        self::assertFalse($access->organizes($organizer, $theirs));
+
+        $this->expectException(DomainException::class);
+        $access->requireRoundAccess($organizer, self::roundIn($theirs));
+    }
+
+    /** A lead reaches the rounds of every campaign in their project. */
+    #[Test]
+    public function aLeadHasTheSameControlOverEveryCampaignInTheProject(): void
+    {
+        $project = self::project(1, 'Earth');
+        $lead = new User('Lea', UserRole::Lead);
+
+        $access = $this->accessControlWith([RoleAssignment::lead($lead, $project)]);
+
+        $access->requireRoundAccess($lead, self::roundIn(self::campaign(10, $project, 'Earth 2026')));
+        $access->requireRoundAccess($lead, self::roundIn(self::campaign(11, $project, 'Earth 2027')));
+
+        self::assertTrue(true, 'A lead was refused a round in their own project.');
     }
 }
