@@ -66,11 +66,8 @@ class RoundActions
     public function importPreview(Request $request, Response $response, array $args): Response
     {
         $round = $this->find($args['id']);
-        $actor = $this->actor($request);
 
-        if ($actor !== null) {
-            $this->access->requireOrganizer($actor, $round->getCampaign());
-        }
+        $this->access->requireRoundAccess($this->requireActor($request), $round);
 
         $category = $round->getSourceCategory();
 
@@ -92,9 +89,7 @@ class RoundActions
         $round = $this->find($args['id']);
         $actor = $this->actor($request);
 
-        if ($actor !== null) {
-            $this->access->requireOrganizer($actor, $round->getCampaign());
-        }
+        $this->access->requireRoundAccess($this->requireActor($request), $round);
 
         $outcome = $this->import->importRoundSource($round, $actor);
         $population = $this->population->populate($round, $outcome['images']);
@@ -133,9 +128,7 @@ class RoundActions
         $round = $this->find($args['id']);
         $actor = $this->actor($request);
 
-        if ($actor !== null) {
-            $this->access->requireOrganizer($actor, $round->getCampaign());
-        }
+        $this->access->requireRoundAccess($this->requireActor($request), $round);
 
         $source = $this->em->getRepository(RoundSource::class)->find((int) $args['sourceId']);
 
@@ -175,6 +168,8 @@ class RoundActions
     {
         $round = $this->find($args['id']);
 
+        $this->access->requireRoundAccess($this->requireActor($request), $round);
+
         return Json::write($response, [
             'thresholds' => $this->derivation->thresholdOptions($round),
         ]);
@@ -213,6 +208,9 @@ class RoundActions
     public function createMeeting(Request $request, Response $response, array $args): Response
     {
         $source = $this->find($args['id']);
+
+        $this->access->requireRoundAccess($this->requireActor($request), $source);
+
         $body = Json::body($request);
 
         $topN = Json::int($body, 'topN', 0);
@@ -244,6 +242,21 @@ class RoundActions
     }
 
     /**
+     * The signed-in user, for permission checks.
+     *
+     * Distinct from actor() because a missing user means something quite
+     * different to the two: an audit entry can be recorded without an
+     * attributable author, but a permission check that cannot name the
+     * caller has nobody to check and must refuse rather than wave the
+     * request through — which is what `if ($actor !== null)` around a
+     * guard silently did.
+     */
+    private function requireActor(Request $request): User
+    {
+        return $this->actor($request) ?? throw DomainException::unauthorized();
+    }
+
+    /**
      * Re-deals images across the panel.
      *
      * Activation allocates automatically; this is for afterwards — when a
@@ -253,6 +266,8 @@ class RoundActions
     public function allocate(Request $request, Response $response, array $args): Response
     {
         $round = $this->find($args['id']);
+
+        $this->access->requireRoundAccess($this->requireActor($request), $round);
 
         if ($round->getState()->isFinal()) {
             throw new DomainException('A finalized round cannot be re-allocated.');
@@ -270,19 +285,22 @@ class RoundActions
     public function show(Request $request, Response $response, array $args): Response
     {
         $round = $this->find($args['id']);
-        $actor = $this->actor($request);
+
+        // This page carries jurors' names and their progress, so reading it
+        // is scoped exactly like acting on it: an organizer of this
+        // campaign, or the lead of the project it belongs to. It was open
+        // to anyone holding an organizer role anywhere in the tool.
+        $this->access->requireRoundAccess($this->requireActor($request), $round);
 
         return Json::write($response, [
             'round' => Presenter::round($round),
             'statistics' => $this->statistics->roundSummary($round),
             'jurors' => $this->statistics->jurorProgress($round),
             'sources' => $this->sources($round),
-            // Lets the round screen show Delete only to someone who could
-            // actually use it. Without this, organizers had no delete
-            // affordance on their own round at all — it existed only in
-            // the admin panel, which they may not have access to.
-            'canManage' => $actor !== null
-                && ($this->access->isAdmin($actor) || $this->access->organizes($actor, $round->getCampaign())),
+            // Everything this screen offers needs the access just checked,
+            // so reaching it at all settles the question. Kept in the
+            // payload because the screen still branches on it.
+            'canManage' => true,
         ]);
     }
 
@@ -297,6 +315,12 @@ class RoundActions
         if ($campaign === null) {
             throw DomainException::notFound('Campaign');
         }
+
+        // Creating a round is scoped like every other change to it: the
+        // route middleware only establishes that the caller organizes
+        // *something*, which was the whole gap here — an organizer of one
+        // campaign could add rounds to any other campaign in the tool.
+        $this->access->requireOrganizer($this->requireActor($request), $campaign);
 
         $body = Json::body($request);
 
@@ -344,6 +368,8 @@ class RoundActions
     public function update(Request $request, Response $response, array $args): Response
     {
         $round = $this->find($args['id']);
+
+        $this->access->requireRoundAccess($this->requireActor($request), $round);
 
         if ($round->getState()->isFinal()) {
             throw new DomainException('A finalized round can no longer be edited.');
@@ -403,6 +429,9 @@ class RoundActions
     public function transition(Request $request, Response $response, array $args): Response
     {
         $round = $this->find($args['id']);
+
+        $this->access->requireRoundAccess($this->requireActor($request), $round);
+
         $target = RoundState::tryFrom((string) ($args['state'] ?? ''));
 
         if ($target === null) {
@@ -455,9 +484,7 @@ class RoundActions
 
         $actor = $this->actor($request);
 
-        if ($actor !== null) {
-            $this->access->requireOrganizer($actor, $round->getCampaign());
-        }
+        $this->access->requireRoundAccess($this->requireActor($request), $round);
 
         $username = User::canonicaliseUsername(
             Json::requireString(Json::body($request), 'username')
@@ -510,6 +537,9 @@ class RoundActions
     public function images(Request $request, Response $response, array $args): Response
     {
         $round = $this->find($args['id']);
+
+        $this->access->requireRoundAccess($this->requireActor($request), $round);
+
         $query = $request->getQueryParams();
 
         $criteria = ['round' => $round];
@@ -546,6 +576,9 @@ class RoundActions
     public function results(Request $request, Response $response, array $args): Response
     {
         $round = $this->find($args['id']);
+
+        $this->access->requireRoundAccess($this->requireActor($request), $round);
+
         $includeDisqualified = filter_var(
             $request->getQueryParams()['includeDisqualified'] ?? false,
             FILTER_VALIDATE_BOOL,
@@ -565,6 +598,9 @@ class RoundActions
     public function export(Request $request, Response $response, array $args): Response
     {
         $round = $this->find($args['id']);
+
+        $this->access->requireRoundAccess($this->requireActor($request), $round);
+
         $format = strtolower((string) ($request->getQueryParams()['format'] ?? 'csv'));
         $results = $this->statistics->results($round);
 
@@ -614,6 +650,9 @@ class RoundActions
     public function previewDerivation(Request $request, Response $response, array $args): Response
     {
         $round = $this->find($args['id']);
+
+        $this->access->requireRoundAccess($this->requireActor($request), $round);
+
         $criteria = DerivationCriteria::fromArray(Json::body($request));
 
         return Json::write($response, [
@@ -626,6 +665,11 @@ class RoundActions
     public function derive(Request $request, Response $response, array $args): Response
     {
         $round = $this->find($args['id']);
+
+        // The derived round lands in the same campaign, so organizing this
+        // one is what authorises creating its successor.
+        $this->access->requireRoundAccess($this->requireActor($request), $round);
+
         $body = Json::body($request);
 
         $derived = $this->derivation->derive(
@@ -645,12 +689,7 @@ class RoundActions
         $round = $this->find($args['id']);
         $actor = $this->actor($request);
 
-        // Every other mutating action here checks this; delete did not,
-        // so any signed-in juror could remove a round outright through the
-        // API even without a delete button anywhere in their view of it.
-        if ($actor !== null) {
-            $this->access->requireOrganizer($actor, $round->getCampaign());
-        }
+        $this->access->requireRoundAccess($this->requireActor($request), $round);
 
         // An active round has jurors voting on it right now; removing it
         // outright would throw away work in progress without warning.

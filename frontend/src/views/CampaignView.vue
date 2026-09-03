@@ -20,15 +20,18 @@ import {
 } from '@wikimedia/codex-icons'
 import CommonsChipInput from '@/components/CommonsChipInput.vue'
 import { api } from '@/api'
-import { useSession } from '@/stores/session'
 import { formatDeadline, formatNumber } from '@/format'
 
 const props = defineProps({ id: { type: String, required: true } })
 const router = useRouter()
-const session = useSession()
 
 const campaign = ref(null)
 const participants = ref({})
+// Scoped to this campaign by the server, rather than read off the global
+// role rank: leading one project says nothing about another's campaign,
+// and an organizer appointed here may manage its rounds without being
+// able to edit the campaign itself.
+const canEditCampaign = ref(false)
 const loading = ref(true)
 const busy = ref(false)
 const error = ref(null)
@@ -61,6 +64,7 @@ async function load() {
     const data = await api.get(`/campaigns/${props.id}`)
     campaign.value = data.campaign
     participants.value = data.participants
+    canEditCampaign.value = data.canEditCampaign ?? false
 
     for (const { key } of roles) {
       chips.value[key] = [...(data.participants[key] ?? [])]
@@ -123,7 +127,7 @@ async function reimport() {
       </div>
       <div class="row">
         <CdxButton
-          v-if="session.isLead"
+          v-if="canEditCampaign"
           @click="router.push({ name: 'campaign-edit', params: { id: campaign.id } })"
         >
           <CdxIcon :icon="cdxIconEdit" /> Edit campaign

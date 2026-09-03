@@ -152,10 +152,34 @@ class CampaignActions
         return $actor instanceof User ? $actor : null;
     }
 
+    /**
+     * The signed-in user, for permission checks.
+     *
+     * A guard that cannot name its caller has nobody to check and must
+     * refuse, rather than let the request through unchecked.
+     */
+    private function requireActor(Request $request): User
+    {
+        return $this->actor($request) ?? throw DomainException::unauthorized();
+    }
+
     public function list(Request $request, Response $response): Response
     {
+        $actor = $this->requireActor($request);
+
         $campaigns = $this->em->getRepository(Campaign::class)
             ->findBy([], ['createdAt' => 'DESC']);
+
+        // Listed the whole tool's campaigns to anyone holding an organizer
+        // role anywhere, which is how an organizer of one contest could
+        // find — and, before the guards above, act on — another's. An admin
+        // still sees everything; everyone else sees what they actually run.
+        if (!$this->access->isAdmin($actor)) {
+            $campaigns = array_values(array_filter(
+                $campaigns,
+                fn (Campaign $c): bool => $this->access->organizes($actor, $c),
+            ));
+        }
 
         return Json::write($response, [
             'campaigns' => array_map(
@@ -168,11 +192,23 @@ class CampaignActions
     public function show(Request $request, Response $response, array $args): Response
     {
         $campaign = $this->find($args['id']);
+        $actor = $this->requireActor($request);
+
+        // The campaign screen is where rounds are created and managed, so
+        // it belongs to whoever runs this campaign: an appointed organizer,
+        // or the lead of the project it sits in (whose grant covers every
+        // campaign in the project). Being an organizer somewhere else in
+        // the tool is not enough — that is all the route middleware knows.
+        $this->access->requireOrganizer($actor, $campaign);
 
         return Json::write($response, [
             'campaign' => Presenter::campaign($campaign, withRounds: true),
             'participants' => $this->participants($campaign),
             'organizers' => $this->organizers($campaign),
+            // Reaching this screen already required organizing the
+            // campaign, so the rounds below need no further flag. Editing
+            // the campaign itself is the lead's, and does.
+            'canEditCampaign' => $this->access->leads($actor, $campaign->getProject()),
         ]);
     }
 
@@ -239,6 +275,11 @@ class CampaignActions
     public function update(Request $request, Response $response, array $args): Response
     {
         $campaign = $this->find($args['id']);
+
+        // Editing the campaign itself stays with its project's lead;
+        // organizers run the rounds beneath it.
+        $this->access->requireLead($this->requireActor($request), $campaign->getProject());
+
         $body = Json::body($request);
 
         if (($name = Json::optionalString($body, 'name')) !== null) {
@@ -255,6 +296,9 @@ class CampaignActions
     public function reimport(Request $request, Response $response, array $args): Response
     {
         $campaign = $this->find($args['id']);
+
+        $this->access->requireOrganizer($this->requireActor($request), $campaign);
+
         $result = $this->import->importCampaign($campaign);
 
         $this->log->record(
@@ -285,6 +329,11 @@ class CampaignActions
     public function setParticipants(Request $request, Response $response, array $args): Response
     {
         $campaign = $this->find($args['id']);
+
+        // These rosters drive each round's "disqualify …" rules, so they
+        // are part of running the contest rather than of owning it.
+        $this->access->requireOrganizer($this->requireActor($request), $campaign);
+
         $body = Json::body($request);
 
         $role = ParticipantRole::tryFrom((string) ($body['role'] ?? ''));
@@ -326,6 +375,8 @@ class CampaignActions
     public function delete(Request $request, Response $response, array $args): Response
     {
         $campaign = $this->find($args['id']);
+
+        $this->access->requireLead($this->requireActor($request), $campaign->getProject());
 
         $name = $campaign->getName();
         $id = $campaign->getId();

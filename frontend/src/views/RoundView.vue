@@ -350,7 +350,10 @@ async function submitDerivation() {
         </p>
       </div>
       <div class="row" style="gap: 0.5rem">
-        <CdxButton @click="router.push({ name: 'round-edit', params: { id: round.id } })">
+        <CdxButton
+          v-if="canManage"
+          @click="router.push({ name: 'round-edit', params: { id: round.id } })"
+        >
           Edit round
         </CdxButton>
         <!-- Only for someone who organizes this round's campaign or leads
@@ -381,7 +384,7 @@ async function submitDerivation() {
              server refuses this anyway, and offering a button that only
              returns an error is worse than showing why it is not ready. -->
         <CdxButton
-          v-if="round.state === 'draft' || round.state === 'paused'"
+          v-if="canManage && (round.state === 'draft' || round.state === 'paused')"
           action="progressive"
           :disabled="busy || needsImport"
           :title="needsImport ? 'Import the round\'s images first.' : undefined"
@@ -390,12 +393,12 @@ async function submitDerivation() {
           Activate
         </CdxButton>
 
-        <CdxButton v-if="round.state === 'active'" :disabled="busy" @click="transition('paused')">
+        <CdxButton v-if="canManage && round.state === 'active'" :disabled="busy" @click="transition('paused')">
           Pause
         </CdxButton>
 
         <CdxButton
-          v-if="round.state === 'active' || round.state === 'paused'"
+          v-if="canManage && (round.state === 'active' || round.state === 'paused')"
           action="progressive"
           :disabled="busy"
           @click="transition('finalized')"
@@ -413,7 +416,7 @@ async function submitDerivation() {
         <!-- Neither of these applies once the round itself is the meeting
              — it is the last step, and the server refuses both anyway. -->
         <CdxButton
-          v-if="round.state === 'finalized' && round.votingMethod !== 'meeting'"
+          v-if="canManage && round.state === 'finalized' && round.votingMethod !== 'meeting'"
           action="progressive"
           weight="primary"
           @click="openDerive"
@@ -422,7 +425,7 @@ async function submitDerivation() {
         </CdxButton>
 
         <CdxButton
-          v-if="round.state === 'finalized' && round.votingMethod !== 'meeting'"
+          v-if="canManage && round.state === 'finalized' && round.votingMethod !== 'meeting'"
           action="progressive"
           weight="primary"
           @click="meetingOpen = true"
@@ -475,6 +478,7 @@ async function submitDerivation() {
 
       <div v-else class="row import-actions">
         <CdxButton
+          v-if="canManage"
           action="progressive"
           weight="primary"
           :disabled="busy"
@@ -613,7 +617,7 @@ async function submitDerivation() {
               </div>
 
               <CdxButton
-                v-if="round.state !== 'finalized'"
+                v-if="canManage && round.state !== 'finalized'"
                 weight="quiet"
                 style="margin-top: 0.25rem"
                 @click="openReplace(juror)"
